@@ -19,6 +19,9 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+DASHBOARD_PORT = 8080
+WEBHOOK_PORT = 8443
+
 
 def main():
     db.init_db(config.DB_PATH)
@@ -59,21 +62,27 @@ def main():
 
 
 def _run_webhook_mode(app):
-    """Run FastAPI server in background + set Telegram webhook + run polling fallback."""
+    """Run FastAPI dashboard + PTB webhook on separate ports."""
     from webhook import app as fastapi_app
 
     def run_fastapi():
         import uvicorn
-        port = config.WEBHOOK_PORT
-        logger.info("FastAPI server mulai di port %d", port)
-        uvicorn.run(fastapi_app, host="0.0.0.0", port=port)
+        logger.info("FastAPI dashboard: http://0.0.0.0:%d", DASHBOARD_PORT)
+        uvicorn.run(fastapi_app, host="0.0.0.0", port=DASHBOARD_PORT)
 
     t = threading.Thread(target=run_fastapi, daemon=True)
     t.start()
 
     webhook_url = f"{config.WEBHOOK_URL}/webhook/telegram"
-    logger.info("Setting webhook: %s", webhook_url)
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("PTB webhook: %s (port %d)", webhook_url, WEBHOOK_PORT)
+
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=WEBHOOK_PORT,
+        url_path="webhook/telegram",
+        webhook_url=webhook_url,
+        allowed_updates=Update.ALL_TYPES,
+    )
 
 
 if __name__ == "__main__":
