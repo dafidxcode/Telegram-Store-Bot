@@ -15,6 +15,7 @@
 """
 
 import logging
+import re
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -37,6 +38,8 @@ _STATUS_EMOJI = {
     "cancelled": "❌",
     "delivered": "📦",
 }
+
+_QUICK_ADD_RE = re.compile(r"^([^|]+)\|(\d{1,})\|?(.*)$")
 
 
 def _is_admin(update: Update) -> bool:
@@ -62,6 +65,44 @@ def _admin_back_keyboard():
     ])
 
 
+async def handle_quick_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Detect Name|Price|Description pattern and add product. Returns True if handled."""
+    if not _is_admin(update):
+        return False
+
+    message = update.message
+    if message is None or not message.text:
+        return False
+
+    text = message.text.strip()
+    m = _QUICK_ADD_RE.match(text)
+    if not m:
+        return False
+
+    name = m.group(1).strip()
+    try:
+        price = int(m.group(2))
+    except ValueError:
+        return False
+
+    description = m.group(3).strip() if m.group(3) else ""
+
+    if not name or price <= 0:
+        return False
+
+    product_id = db.add_product(name=name, description=description, price=price)
+    await message.reply_text(
+        f"*✅ Produk ditambahkan!*\n\n"
+        f"🆔 ID: `{product_id}`\n"
+        f"📦 Nama: *{name}*\n"
+        f"💰 Harga: *Rp {format_rupiah(price)}*\n"
+        f"📝 Deskripsi: {description or '-'}",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=_admin_back_keyboard(),
+    )
+    return True
+
+
 def register(app: Application) -> None:
     app.add_handler(CommandHandler("addproduct", cmd_addproduct))
     app.add_handler(CommandHandler("editproduct", cmd_editproduct))
@@ -77,6 +118,12 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("removeadmin", cmd_removeadmin))
     app.add_handler(CommandHandler("adminlist", cmd_adminlist))
     app.add_handler(
+        MessageHandler(
+            filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+            handle_quick_addproduct_text,
+        ),
+    )
+    app.add_handler(
         MessageHandler(filters.Document.ALL & filters.ChatType.PRIVATE, handle_document),
     )
 
@@ -84,6 +131,11 @@ def register(app: Application) -> None:
 # ---------------------------------------------------------------------------
 # Product management
 # ---------------------------------------------------------------------------
+
+async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Wrapper for MessageHandler — delegates to quick-add if pattern matches."""
+    await handle_quick_addproduct(update, context)
+
 
 async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_admin(update):
