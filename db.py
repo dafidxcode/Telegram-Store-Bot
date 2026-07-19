@@ -101,6 +101,24 @@ def get_stock_count() -> int:
     return row["cnt"] if row else 0
 
 
+def get_total_sold() -> int:
+    assert _conn is not None
+    row = _conn.execute("SELECT COUNT(*) as cnt FROM stock WHERE status = 'sold'").fetchone()
+    return row["cnt"] if row else 0
+
+
+def get_user_order_count(user_id: int) -> int:
+    assert _conn is not None
+    row = _conn.execute("SELECT COUNT(*) as cnt FROM orders WHERE user_id = ?", (user_id,)).fetchone()
+    return row["cnt"] if row else 0
+
+
+def get_total_users() -> int:
+    assert _conn is not None
+    row = _conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+    return row["cnt"] if row else 0
+
+
 def take_stock(order_id: str, quantity: int) -> list[dict]:
     """Atomically mark `quantity` stock items as sold and return them.
     Uses a transaction to prevent race conditions."""
