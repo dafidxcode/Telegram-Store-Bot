@@ -108,6 +108,42 @@ def get_main_menu_keyboard(user_id: int = 0):
     return InlineKeyboardMarkup(rows)
 
 
+def get_admin_panel_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📦 Lihat Produk", callback_data="admin:products"),
+            InlineKeyboardButton("📊 Info Stok", callback_data="admin:stockinfo"),
+        ],
+        [
+            InlineKeyboardButton("📋 Lihat Order", callback_data="admin:orders"),
+            InlineKeyboardButton("👥 Admin List", callback_data="admin:adminlist"),
+        ],
+        [
+            InlineKeyboardButton("➕ Tambah Produk", callback_data="admin:addproduct"),
+            InlineKeyboardButton("📥 Tambah Stok", callback_data="admin:addstock"),
+        ],
+        [
+            InlineKeyboardButton("💰 Ubah Harga", callback_data="admin:setprice"),
+            InlineKeyboardButton("📣 Broadcast", callback_data="admin:broadcast"),
+        ],
+        [
+            InlineKeyboardButton("👤 Tambah Admin", callback_data="admin:addadmin"),
+            InlineKeyboardButton("👤 Hapus Admin", callback_data="admin:removeadmin"),
+        ],
+        [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
+    ])
+
+
+def get_admin_back_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Kembali ke Admin Panel", callback_data="menu:admin")],
+        [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
+    ])
+
+
+_STATUS_EMOJI = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦"}
+
+
 def register(app: Application) -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", cmd_start))
@@ -115,6 +151,7 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("stock", cmd_stock))
     app.add_handler(CommandHandler("produk", cmd_produk))
     app.add_handler(CallbackQueryHandler(handle_menu_button, pattern=r"^menu:"))
+    app.add_handler(CallbackQueryHandler(handle_admin_button, pattern=r"^admin:"))
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -201,6 +238,10 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Menu button callbacks
+# ---------------------------------------------------------------------------
+
 async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if query is None:
@@ -259,7 +300,6 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 )
                 return
 
-            _STATUS_EMOJI = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦"}
             recent = orders[:10]
             lines = ["*📋 Riwayat Order*\n"]
 
@@ -282,26 +322,26 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.answer("Akses ditolak.", show_alert=True)
             return
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
-        ])
-        await query.edit_message_text(
-            "*⚙️ Admin Panel*\n\n"
-            "📦 /products - Lihat produk\n"
-            "➕ /addproduct <nama> <harga> - Tambah produk\n"
-            "✏️ /editproduct <id> <field>=<value> - Edit produk\n"
-            "🗑️ /delproduct <id> - Hapus produk\n"
-            "📋 /orders - Lihat order\n"
-            "📊 /stockinfo - Info stok\n"
-            "💰 /setprice <harga> - Ubah harga\n"
-            "📥 /addstock - Tambah stok\n"
-            "📣 /broadcast <pesan> - Kirim pesan\n"
-            "👤 /addadmin <id> - Tambah admin\n"
-            "👤 /removeadmin <id> - Hapus admin\n"
-            "👥 /adminlist - Lihat daftar admin",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=keyboard,
+        stock = db.get_stock_count()
+        sold = db.get_total_sold()
+        total_users = db.get_total_users()
+        products = db.get_active_products()
+        pending = len(db.get_pending_qris_orders())
+
+        text = (
+            f"*⚙️ ADMIN PANEL*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"*📊 Dashboard*\n"
+            f"📦 Stok Ready : *{stock}* akun\n"
+            f"✅ Terjual : *{sold}* akun\n"
+            f"⏳ Order Pending : *{pending}*\n"
+            f"👥 Total User : *{total_users}*\n"
+            f"🛍️ Total Produk : *{len(products)}*\n"
+            f"💰 Harga : *Rp {format_rupiah(config.HARGA_PER_AKUN)}/akun*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Pilih menu admin di bawah 👇"
         )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_panel_keyboard())
 
     elif action == "help":
         keyboard = InlineKeyboardMarkup([
@@ -324,3 +364,283 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "/cancel - ❌ Batalkan proses"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+
+
+# ---------------------------------------------------------------------------
+# Admin panel button callbacks
+# ---------------------------------------------------------------------------
+
+async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None:
+        return
+
+    await query.answer()
+
+    if update.effective_user.id not in config.ADMIN_IDS:
+        await query.answer("Akses ditolak.", show_alert=True)
+        return
+
+    action = query.data.split(":")[1] if query.data else ""
+
+    if action == "products":
+        products = db.get_all_products()
+        if not products:
+            await query.edit_message_text(
+                "*📦 Daftar Produk*\n\nBelum ada produk.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_admin_back_keyboard(),
+            )
+            return
+
+        lines = ["*📦 DAFTAR PRODUK*\n"]
+        for p in products:
+            stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
+            status = "✅" if p["is_active"] else "❌"
+            lines.append(
+                f"{status} #{p['id']} | *{p['name']}*\n"
+                f"   💰 Harga: Rp {format_rupiah(p['price'])}\n"
+                f"   📦 Stok: {stock}\n"
+            )
+
+        await query.edit_message_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_admin_back_keyboard(),
+        )
+
+    elif action == "stockinfo":
+        stock = db.get_stock_count()
+        pending = len(db.get_pending_qris_orders())
+        products = db.get_active_products()
+
+        text = (
+            f"*📊 INFO STOK*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 Stok Ready: *{stock}* akun\n"
+            f"⏳ Order Pending: *{pending}*\n"
+        )
+        for p in products:
+            p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+            text += f"\n#{p['id']} {p['name']}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
+
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
+
+    elif action == "orders":
+        try:
+            orders = db.get_all_orders(limit=20)
+        except Exception as exc:
+            logger.exception("Gagal get_all_orders: %s", exc)
+            await query.edit_message_text("Maaf, ada masalah.", reply_markup=get_admin_back_keyboard())
+            return
+
+        if not orders:
+            await query.edit_message_text(
+                "*📋 ORDER TERBARU*\n\nBelum ada order.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_admin_back_keyboard(),
+            )
+            return
+
+        lines = [f"*📋 ORDER TERBARU* ({len(orders)})\n"]
+        for o in orders:
+            username = o.get("username") or "no_user"
+            status = o.get("status", "pending")
+            emoji = _STATUS_EMOJI.get(status, "⏳")
+            order_id = o["id"]
+            product = db.get_product(o.get("product_id", 1))
+            product_name = product["name"] if product else "N/A"
+
+            lines.append(
+                f"#{order_id} | @{username}\n"
+                f"📦 {product_name}\n"
+                f"🔢 {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
+                f"Status: {emoji} {status}\n"
+            )
+
+        filter_buttons = [
+            InlineKeyboardButton("📋 Semua", callback_data="admin:orders"),
+            InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
+            InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
+        ]
+        keyboard_rows = [filter_buttons]
+        back_row = [InlineKeyboardButton("⬅️ Kembali ke Admin Panel", callback_data="menu:admin")]
+        keyboard_rows.append(back_row)
+
+        await query.edit_message_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup(keyboard_rows),
+        )
+
+    elif action == "orders_pending":
+        try:
+            orders = db.get_all_orders(limit=20, status="pending")
+        except Exception:
+            await query.edit_message_text("Maaf, ada masalah.", reply_markup=get_admin_back_keyboard())
+            return
+
+        if not orders:
+            await query.edit_message_text(
+                "*⏳ ORDER PENDING*\n\nTidak ada order pending.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_admin_back_keyboard(),
+            )
+            return
+
+        lines = [f"*⏳ ORDER PENDING* ({len(orders)})\n"]
+        for o in orders:
+            username = o.get("username") or "no_user"
+            order_id = o["id"]
+            product = db.get_product(o.get("product_id", 1))
+            product_name = product["name"] if product else "N/A"
+            lines.append(
+                f"#{order_id} | @{username}\n"
+                f"📦 {product_name}\n"
+                f"🔢 {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
+            )
+
+        filter_buttons = [
+            InlineKeyboardButton("📋 Semua", callback_data="admin:orders"),
+            InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
+            InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
+        ]
+        keyboard_rows = [filter_buttons]
+        keyboard_rows.append([InlineKeyboardButton("⬅️ Kembali ke Admin Panel", callback_data="menu:admin")])
+
+        await query.edit_message_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup(keyboard_rows),
+        )
+
+    elif action == "orders_paid":
+        try:
+            orders = db.get_all_orders(limit=20, status="paid")
+        except Exception:
+            await query.edit_message_text("Maaf, ada masalah.", reply_markup=get_admin_back_keyboard())
+            return
+
+        if not orders:
+            await query.edit_message_text(
+                "*✅ ORDER PAID*\n\nTidak ada order paid.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_admin_back_keyboard(),
+            )
+            return
+
+        lines = [f"*✅ ORDER PAID* ({len(orders)})\n"]
+        for o in orders:
+            username = o.get("username") or "no_user"
+            order_id = o["id"]
+            product = db.get_product(o.get("product_id", 1))
+            product_name = product["name"] if product else "N/A"
+            lines.append(
+                f"#{order_id} | @{username}\n"
+                f"📦 {product_name}\n"
+                f"🔢 {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
+            )
+
+        filter_buttons = [
+            InlineKeyboardButton("📋 Semua", callback_data="admin:orders"),
+            InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
+            InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
+        ]
+        keyboard_rows = [filter_buttons]
+        keyboard_rows.append([InlineKeyboardButton("⬅️ Kembali ke Admin Panel", callback_data="menu:admin")])
+
+        await query.edit_message_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup(keyboard_rows),
+        )
+
+    elif action == "adminlist":
+        lines = ["*👥 DAFTAR ADMIN*\n"]
+        for i, admin_id in enumerate(sorted(config.ADMIN_IDS), 1):
+            is_main = " ⭐" if admin_id == config.ADMIN_USER_ID else ""
+            lines.append(f"{i}. `{admin_id}`{is_main}")
+
+        lines.append(f"\n📊 Total: *{len(config.ADMIN_IDS)}* admin")
+
+        await query.edit_message_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_admin_back_keyboard(),
+        )
+
+    elif action == "addproduct":
+        text = (
+            "*➕ TAMBAH PRODUK*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Ketik perintah berikut:\n\n"
+            "`/addproduct NamaProduk Harga Deskripsi`\n\n"
+            "*Contoh:*\n"
+            "`/addproduct Leonardo 10000 Akun Leonardo AI`\n"
+            "`/addproduct GSuite 100000 GSuite 30 hari`\n\n"
+            "Deskripsi bersifat opsional."
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
+
+    elif action == "addstock":
+        text = (
+            "*📥 TAMBAH STOK*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "*Cara 1:* Kirim file .txt dengan format:\n"
+            "`email:password:balance`\n\n"
+            "*Cara 2:* Paste langsung di chat:\n"
+            "`email1:pass1:balance1`\n"
+            "`email2:pass2:balance2`\n\n"
+            "Atau gunakan perintah:\n"
+            "`/addstock` lalu kirim file/txt\n\n"
+            "Kirim sekarang! 📤"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
+
+    elif action == "setprice":
+        text = (
+            f"*💰 UBAH HARGA*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Harga saat ini: *Rp {format_rupiah(config.HARGA_PER_AKUN)}/akun*\n\n"
+            f"Ketik perintah:\n"
+            f"`/setprice HargaBaru`\n\n"
+            f"*Contoh:*\n"
+            f"`/setprice 15000`"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
+
+    elif action == "broadcast":
+        text = (
+            "*📣 BROADCAST*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Kirim pesan ke semua user.\n\n"
+            "Ketik perintah:\n"
+            "`/broadcast Pesan Anda`\n\n"
+            "*Contoh:*\n"
+            "`/broadcast Promo weekend diskon 20%!`"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
+
+    elif action == "addadmin":
+        text = (
+            "*👤 TAMBAH ADMIN*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Ketik perintah:\n"
+            "`/addadmin TelegramUserID`\n\n"
+            "*Contoh:*\n"
+            "`/addadmin 123456789`\n\n"
+            "💡 Untuk cari ID: Forward pesan ke @userinfobot"
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
+
+    elif action == "removeadmin":
+        text = (
+            "*👤 HAPUS ADMIN*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Ketik perintah:\n"
+            "`/removeadmin TelegramUserID`\n\n"
+            "*Contoh:*\n"
+            "`/removeadmin 123456789`\n\n"
+            "⚠️ Tidak bisa menghapus admin utama."
+        )
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
