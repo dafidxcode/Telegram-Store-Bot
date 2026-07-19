@@ -69,7 +69,7 @@ def register(app: Application) -> None:
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation)],
-        per_message=False,
+        per_message=True,
         per_chat=True,
         conversation_timeout=600,
     )
