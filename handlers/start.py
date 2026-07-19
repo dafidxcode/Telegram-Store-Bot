@@ -45,47 +45,47 @@ def build_home_text(user) -> str:
     first_name = user.first_name or "teman"
 
     return (
-        f"{get_greeting()}, {first_name}!\n"
-        f"{get_now_wib()}\n"
+        f"{get_greeting()}, {first_name}! 🌟\n"
+        f"📅 {get_now_wib()}\n"
         f"\n"
         f"Selamat datang di *{config.SHOP_NAME}*.\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"  STATISTIK AKUN\n"
-        f"Username : {username}\n"
-        f"ID : {user.id}\n"
-        f"Total Order : {user_orders} transaksi\n"
+        f"📊 STATISTIK AKUN\n"
+        f"👤 Username : {username}\n"
+        f"🆔 ID : {user.id}\n"
+        f"🛒 Total Order : {user_orders} transaksi\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"  STATISTIK BOT\n"
-        f"Akun Terjual : {sold}\n"
-        f"Harga : Rp {format_rupiah(config.HARGA_PER_AKUN)}/akun\n"
-        f"Stok Akun : {stock}\n"
-        f"Total User : {total_users}\n"
+        f"📊 STATISTIK BOT\n"
+        f"✅ Akun Terjual : {sold}\n"
+        f"💰 Harga : Rp {format_rupiah(config.HARGA_PER_AKUN)}/akun\n"
+        f"📦 Stok Akun : {stock}\n"
+        f"👥 Total User : {total_users}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
         f"Mulai dari mana?\n"
-        f"Beli akun → Daftar Produk\n"
-        f"Cek transaksi → Riwayat Order"
+        f"🛒 Beli akun → Daftar Produk\n"
+        f"📋 Cek transaksi → Riwayat Order"
     )
 
 
 def build_products_text() -> str:
     products = db.get_active_products()
     if not products:
-        return "*Daftar Produk*\n\nBelum ada produk tersedia."
+        return "*🛍️ DAFTAR PRODUK*\n\nBelum ada produk tersedia."
 
-    lines = ["*DAFTAR PRODUK*\n"]
+    lines = ["*🛍️ DAFTAR PRODUK*\n"]
     for i, p in enumerate(products, 1):
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
-        duration = f"\nDurasi: {p['duration']}" if p.get("duration") else ""
+        duration = f"\n⏰ Durasi: {p['duration']}" if p.get("duration") else ""
         desc = f"\n{p['description']}" if p.get("description") else ""
 
         lines.append(
             f"*{i}. {p['name']}* {'🔥' if i == 1 else ''}\n"
             f"{desc}{duration}\n"
-            f"Harga: *Rp {format_rupiah(p['price'])}*\n"
-            f"Stok: *{stock}* {'Akun' if p['stock_type'] == 'limited' else ''}\n"
+            f"💰 Harga: *Rp {format_rupiah(p['price'])}*\n"
+            f"📦 Stok: *{stock}* {'Akun' if p['stock_type'] == 'limited' else ''}\n"
         )
 
     lines.append("Pilih produk untuk memesan:")
@@ -94,17 +94,17 @@ def build_products_text() -> str:
 
 def get_main_menu_keyboard(user_id: int = 0):
     rows = [
-        [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
+        [InlineKeyboardButton("🛍️ Daftar Produk", callback_data="menu:produk")],
         [
-            InlineKeyboardButton("Cek Stok", callback_data="menu:stok"),
-            InlineKeyboardButton("Riwayat Order", callback_data="menu:orders"),
+            InlineKeyboardButton("📦 Cek Stok", callback_data="menu:stok"),
+            InlineKeyboardButton("📋 Riwayat Order", callback_data="menu:orders"),
         ],
         [
-            InlineKeyboardButton("Bantuan", callback_data="menu:help"),
+            InlineKeyboardButton("❓ Bantuan", callback_data="menu:help"),
         ],
     ]
     if user_id in config.ADMIN_IDS:
-        rows.append([InlineKeyboardButton("Admin Panel", callback_data="menu:admin")])
+        rows.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu:admin")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -143,10 +143,10 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     buttons = []
     for p in products:
         buttons.append([InlineKeyboardButton(
-            f"{p['name']} - Rp {format_rupiah(p['price'])}",
+            f"🛒 {p['name']} - Rp {format_rupiah(p['price'])}",
             callback_data=f"buy:{p['id']}",
         )])
-    buttons.append([InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")])
+    buttons.append([InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")])
 
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -157,24 +157,24 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
+        [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
     ])
 
     text = (
-        "*Bantuan*\n\n"
+        "*❓ Bantuan*\n\n"
         "*Cara Beli:*\n"
-        "1. Klik *Daftar Produk*\n"
+        "1. Klik *🛍️ Daftar Produk*\n"
         "2. Pilih produk\n"
         "3. Pilih jumlah\n"
         "4. Konfirmasi & bayar via QRIS\n"
         "5. Akun otomatis dikirim\n\n"
         "*Commands:*\n"
-        "/start - Menu utama\n"
-        "/produk - Lihat produk\n"
-        "/beli - Beli akun\n"
-        "/stock - Cek stok\n"
-        "/myorders - Riwayat order\n"
-        "/cancel - Batalkan proses"
+        "/start - 🏠 Menu utama\n"
+        "/produk - 🛍️ Lihat produk\n"
+        "/beli - 🛒 Beli akun\n"
+        "/stock - 📦 Cek stok\n"
+        "/myorders - 📋 Riwayat order\n"
+        "/cancel - ❌ Batalkan proses"
     )
 
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -187,15 +187,15 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     stock = db.get_stock_count()
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
-        [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
+        [InlineKeyboardButton("🛍️ Daftar Produk", callback_data="menu:produk")],
+        [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
     ])
 
     await message.reply_text(
-        f"*Info Stok*\n\n"
-        f"Stok tersedia: *{stock}* akun\n"
-        f"Harga: *Rp {config.HARGA_PER_AKUN:,}/akun*\n"
-        f"Total nilai: *Rp {format_rupiah(config.HARGA_PER_AKUN * stock)}*",
+        f"*📦 Info Stok*\n\n"
+        f"📦 Stok tersedia: *{stock}* akun\n"
+        f"💰 Harga: *Rp {config.HARGA_PER_AKUN:,}/akun*\n"
+        f"💵 Total nilai: *Rp {format_rupiah(config.HARGA_PER_AKUN * stock)}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=keyboard,
     )
@@ -221,29 +221,29 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         buttons = []
         for p in products:
             buttons.append([InlineKeyboardButton(
-                f"{p['name']} - Rp {format_rupiah(p['price'])}",
+                f"🛒 {p['name']} - Rp {format_rupiah(p['price'])}",
                 callback_data=f"buy:{p['id']}",
             )])
-        buttons.append([InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")])
+        buttons.append([InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")])
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif action == "stok":
         stock = db.get_stock_count()
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
-            [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
+            [InlineKeyboardButton("🛍️ Daftar Produk", callback_data="menu:produk")],
+            [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
         ])
         text = (
-            f"*Info Stok*\n\n"
-            f"Stok tersedia: *{stock}* akun\n"
-            f"Harga: *Rp {config.HARGA_PER_AKUN:,}/akun*\n"
-            f"Total nilai: *Rp {format_rupiah(config.HARGA_PER_AKUN * stock)}*"
+            f"*📦 Info Stok*\n\n"
+            f"📦 Stok tersedia: *{stock}* akun\n"
+            f"💰 Harga: *Rp {config.HARGA_PER_AKUN:,}/akun*\n"
+            f"💵 Total nilai: *Rp {format_rupiah(config.HARGA_PER_AKUN * stock)}*"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
     elif action == "orders":
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
+            [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
         ])
         try:
             user_id = update.effective_user.id
@@ -251,17 +251,17 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
             if not orders:
                 await query.edit_message_text(
-                    "Belum ada orderan. Yuk beli sekarang!",
+                    "Belum ada orderan. Yuk beli sekarang! 🛒",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
-                        [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
+                        [InlineKeyboardButton("🛍️ Daftar Produk", callback_data="menu:produk")],
+                        [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
                     ]),
                 )
                 return
 
             _STATUS_EMOJI = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦"}
             recent = orders[:10]
-            lines = ["*Riwayat Order*\n"]
+            lines = ["*📋 Riwayat Order*\n"]
 
             for o in recent:
                 order_id = o.get("id", "")
@@ -283,44 +283,44 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
+            [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
         ])
         await query.edit_message_text(
-            "*Admin Panel*\n\n"
-            "/products - Lihat produk\n"
-            "/addproduct <nama> <harga> - Tambah produk\n"
-            "/editproduct <id> <field>=<value> - Edit produk\n"
-            "/delproduct <id> - Hapus produk\n"
-            "/orders - Lihat order\n"
-            "/stockinfo - Info stok\n"
-            "/setprice <harga> - Ubah harga\n"
-            "/addstock - Tambah stok\n"
-            "/broadcast <pesan> - Kirim pesan\n"
-            "/addadmin <id> - Tambah admin\n"
-            "/removeadmin <id> - Hapus admin\n"
-            "/adminlist - Lihat daftar admin",
+            "*⚙️ Admin Panel*\n\n"
+            "📦 /products - Lihat produk\n"
+            "➕ /addproduct <nama> <harga> - Tambah produk\n"
+            "✏️ /editproduct <id> <field>=<value> - Edit produk\n"
+            "🗑️ /delproduct <id> - Hapus produk\n"
+            "📋 /orders - Lihat order\n"
+            "📊 /stockinfo - Info stok\n"
+            "💰 /setprice <harga> - Ubah harga\n"
+            "📥 /addstock - Tambah stok\n"
+            "📣 /broadcast <pesan> - Kirim pesan\n"
+            "👤 /addadmin <id> - Tambah admin\n"
+            "👤 /removeadmin <id> - Hapus admin\n"
+            "👥 /adminlist - Lihat daftar admin",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=keyboard,
         )
 
     elif action == "help":
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
+            [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
         ])
         text = (
-            "*Bantuan*\n\n"
+            "*❓ Bantuan*\n\n"
             "*Cara Beli:*\n"
-            "1. Klik *Daftar Produk*\n"
+            "1. Klik *🛍️ Daftar Produk*\n"
             "2. Pilih produk\n"
             "3. Pilih jumlah\n"
             "4. Konfirmasi & bayar via QRIS\n"
             "5. Akun otomatis dikirim\n\n"
             "*Commands:*\n"
-            "/start - Menu utama\n"
-            "/produk - Lihat produk\n"
-            "/beli - Beli akun\n"
-            "/stock - Cek stok\n"
-            "/myorders - Riwayat order\n"
-            "/cancel - Batalkan proses"
+            "/start - 🏠 Menu utama\n"
+            "/produk - 🛍️ Lihat produk\n"
+            "/beli - 🛒 Beli akun\n"
+            "/stock - 📦 Cek stok\n"
+            "/myorders - 📋 Riwayat order\n"
+            "/cancel - ❌ Batalkan proses"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
