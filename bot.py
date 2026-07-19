@@ -1,7 +1,6 @@
 """Main entry point for SWD x Videogen Bot."""
 
 import logging
-import threading
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder
@@ -18,9 +17,6 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
-
-DASHBOARD_PORT = 8080
-WEBHOOK_PORT = 8443
 
 
 def main():
@@ -54,35 +50,8 @@ def main():
         )
         logger.info("QRIS poller aktif (interval %ds)", poller.POLL_INTERVAL)
 
-    if config.USE_WEBHOOK and config.WEBHOOK_URL:
-        _run_webhook_mode(app)
-    else:
-        logger.info("Starting in POLLING mode...")
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-
-def _run_webhook_mode(app):
-    """Run FastAPI dashboard + PTB webhook on separate ports."""
-    from webhook import app as fastapi_app
-
-    def run_fastapi():
-        import uvicorn
-        logger.info("FastAPI dashboard: http://0.0.0.0:%d", DASHBOARD_PORT)
-        uvicorn.run(fastapi_app, host="0.0.0.0", port=DASHBOARD_PORT)
-
-    t = threading.Thread(target=run_fastapi, daemon=True)
-    t.start()
-
-    webhook_url = f"{config.WEBHOOK_URL}/webhook/telegram"
-    logger.info("PTB webhook: %s (port %d)", webhook_url, WEBHOOK_PORT)
-
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=WEBHOOK_PORT,
-        url_path="webhook/telegram",
-        webhook_url=webhook_url,
-        allowed_updates=Update.ALL_TYPES,
-    )
+    logger.info("Starting bot...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
