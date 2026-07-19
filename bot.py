@@ -35,7 +35,14 @@ def main():
     else:
         logger.warning("KlikQRIS: non-aktif.")
 
-    app = ApplicationBuilder().token(config.BOT_TOKEN).build()
+    app = (
+        ApplicationBuilder()
+        .token(config.BOT_TOKEN)
+        .connect_timeout(30)
+        .read_timeout(30)
+        .write_timeout(30)
+        .build()
+    )
 
     start.register(app)
     admin.register(app)
