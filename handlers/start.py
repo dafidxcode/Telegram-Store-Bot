@@ -581,16 +581,54 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
 
     elif action == "addstock":
+        products = db.get_active_products()
+        if not products:
+            await query.edit_message_text(
+                "*📥 ADD STOCK*\n\nNo active products yet. Add a product first.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_admin_back_keyboard(),
+            )
+            return
+
+        buttons = []
+        for p in products:
+            stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+            buttons.append([InlineKeyboardButton(
+                f"📦 {p['name']} (Stock: {stock})",
+                callback_data=f"admin:astk:{p['id']}",
+            )])
+        buttons.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+
+        await query.edit_message_text(
+            "*📥 ADD STOCK*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nSelect product to add stock to:",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+    elif action == "astk":
+        parts = query.data.split(":")
+        if len(parts) < 3:
+            return
+        try:
+            product_id = int(parts[2])
+        except ValueError:
+            return
+
+        product = db.get_product(product_id)
+        if not product:
+            await query.edit_message_text("Product not found.", reply_markup=get_admin_back_keyboard())
+            return
+
+        context.user_data["addstock_product_id"] = product_id
+
         text = (
-            "*📥 ADD STOCK*\n"
+            f"*📥 ADD STOCK — {product['name']}*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "*Method 1:* Send a .txt file with format:\n"
-            "`email:password:balance`\n\n"
-            "*Method 2:* Paste directly in chat:\n"
-            "`email1:pass1:balance1`\n"
-            "`email2:pass2:balance2`\n\n"
-            "Or use command:\n"
-            "`/addstock` then send file/txt\n\n"
+            "*Method 1:* Send a .txt file\n"
+            "Format per line: `email:password`\n\n"
+            "*Method 2:* Paste directly in chat\n"
+            "`email1:password1`\n"
+            "`email2:password2`\n\n"
             "Send now! 📤"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())

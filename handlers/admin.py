@@ -133,7 +133,27 @@ def register(app: Application) -> None:
 # ---------------------------------------------------------------------------
 
 async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Wrapper for MessageHandler — delegates to quick-add if pattern matches."""
+    """If in addstock mode, try parsing as email:password. Otherwise try quick-add product."""
+    addstock_pid = context.user_data.get("addstock_product_id")
+    if addstock_pid:
+        message = update.message
+        if message is None or not message.text:
+            return
+        lines = message.text.strip().splitlines()
+        count = db.add_stock_batch(lines, product_id=addstock_pid)
+        if count > 0:
+            product = db.get_product(addstock_pid)
+            stock = db.get_stock_count(addstock_pid)
+            context.user_data.pop("addstock_product_id", None)
+            await message.reply_text(
+                f"*✅ Stock added to {product['name'] if product else 'product'}!*\n\n"
+                f"📥 Added: *{count}* accounts\n"
+                f"📦 Product stock: *{stock}* accounts",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=_admin_back_keyboard(),
+            )
+        return
+
     await handle_quick_addproduct(update, context)
 
 
@@ -351,8 +371,11 @@ async def cmd_addstock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await message.reply_text(
         "*📥 ADD STOCK*\n\n"
         "*Method 1:* Send a .txt file with format per line:\n"
-        "`email:password:balance`\n\n"
-        "*Method 2:* Paste account list directly in chat (one account per line)\n\n"
+        "`email:password`\n\n"
+        "*Method 2:* Paste account list directly in chat (one account per line)\n"
+        "`email1:password1`\n"
+        "`email2:password2`\n\n"
+        "Or use the Admin Panel button to select a product first.\n\n"
         "Send now! 📤",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
@@ -371,10 +394,10 @@ async def cmd_addstock_txt(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await message.reply_text(
         "*📥 ADD STOCK*\n\n"
         "Send a .txt file with format per line:\n"
-        "`email:password:balance`\n\n"
+        "`email:password`\n\n"
         "Or paste directly in chat:\n"
-        "`email1:pass1:balance1`\n"
-        "`email2:pass2:balance2`",
+        "`email1:password1`\n"
+        "`email2:password2`",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -409,13 +432,17 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
-    count = db.add_stock_batch(lines)
-    stock = db.get_stock_count()
+    count = db.add_stock_batch(lines, product_id=context.user_data.get("addstock_product_id", 1))
+    product_id = context.user_data.pop("addstock_product_id", None)
+    product = db.get_product(product_id) if product_id else None
+    stock = db.get_stock_count(product_id) if product_id else db.get_stock_count()
+    product_label = product["name"] if product else "all products"
 
     await message.reply_text(
         f"*✅ Stock added successfully!*\n\n"
+        f"📦 Product: *{product_label}*\n"
         f"📥 Added: *{count}* accounts\n"
-        f"📦 Total stock: *{stock}* accounts",
+        f"📦 Stock: *{stock}* accounts",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )

@@ -175,7 +175,7 @@ def delete_product(product_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 def add_stock_batch(lines: list[str], product_id: int = 1) -> int:
-    """Parse lines of format email:password:balance and insert ready stock."""
+    """Parse lines of format email:password and insert ready stock."""
     assert _conn is not None
     count = 0
     for line in lines:
