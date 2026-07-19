@@ -47,10 +47,12 @@ CREATE TABLE IF NOT EXISTS orders (
   first_name TEXT,
   quantity INTEGER NOT NULL,
   total INTEGER NOT NULL,
+  qris_nominal INTEGER DEFAULT 0,
   status TEXT DEFAULT 'pending',
   qris_ref TEXT,
   created_at TEXT DEFAULT (datetime('now')),
-  paid_at TEXT
+  paid_at TEXT,
+  expires_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -81,6 +83,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {row["name"] for row in cursor.fetchall()}
     if "product_id" not in cols:
         conn.execute("ALTER TABLE orders ADD COLUMN product_id INTEGER DEFAULT 1")
+    if "qris_nominal" not in cols:
+        conn.execute("ALTER TABLE orders ADD COLUMN qris_nominal INTEGER DEFAULT 0")
+    if "expires_at" not in cols:
+        conn.execute("ALTER TABLE orders ADD COLUMN expires_at TEXT")
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS products (
@@ -269,12 +275,14 @@ def create_order(
     quantity: int,
     total: int,
     product_id: int = 1,
+    qris_nominal: int = 0,
+    expires_at: str = "",
 ) -> None:
     assert _conn is not None
     _conn.execute(
-        """INSERT INTO orders (id, product_id, user_id, username, first_name, quantity, total)
-        VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (order_id, product_id, user_id, username, first_name, quantity, total),
+        """INSERT INTO orders (id, product_id, user_id, username, first_name, quantity, total, qris_nominal, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (order_id, product_id, user_id, username, first_name, quantity, total, qris_nominal, expires_at),
     )
     _conn.commit()
 

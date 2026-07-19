@@ -1,15 +1,11 @@
-"""Buy flow with inline keyboard buttons.
-
-- Menu button: buy:<product_id>
-- Conversation: JUMLAH -> KONFIRMASI -> pembayaran QRIS -> auto deliver
-"""
+"""Buy flow with product detail, cart +/- buttons, QRIS payment display."""
 
 from __future__ import annotations
 
 import io
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -37,6 +33,14 @@ def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
 
+def get_wib_now() -> str:
+    return datetime.now(tz=timezone(timedelta(hours=7))).strftime("%d %B %Y pukul %H:%M WIB")
+
+
+def get_wib_expiry(minutes: int = 30) -> str:
+    return datetime.now(tz=timezone(timedelta(hours=7)) + timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def get_main_menu_keyboard(user_id: int = 0):
     rows = [
         [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
@@ -59,9 +63,8 @@ def register(app: Application) -> None:
         ],
         states={
             JUMLAH: [
-                CallbackQueryHandler(handle_quick_qty, pattern=r"^qty:\d+$"),
-                CallbackQueryHandler(handle_custom_qty, pattern=r"^qty:custom$"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_jumlah),
+                CallbackQueryHandler(handle_cart_action, pattern=r"^cart:(minus|plus|custom|input)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_manual_jumlah),
             ],
             KONFIRMASI: [
                 CallbackQueryHandler(handle_confirm, pattern=r"^confirm:(yes|no)$"),
@@ -96,11 +99,11 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )])
     buttons.append([InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")])
 
-    text = (
-        "*Pilih Produk*\n\n"
-        "Pilih produk yang ingin dibeli:"
+    await message.reply_text(
+        "*Pilih Produk*\n\nPilih produk yang ingin dibeli:",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup(buttons),
     )
-    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
     return JUMLAH
 
 
@@ -122,130 +125,108 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
     stock = db.get_stock_count(product_id) if product["stock_type"] == "limited" else None
-
     if product["stock_type"] == "limited" and (stock is None or stock <= 0):
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
-        ])
         await query.edit_message_text(
-            f"Maaf, stok *{product['name']}* kosong.",
+            f"Maaf, stok *{product['name']}* kosong.\n\n"
+            "Pilih produk lain atau tunggu admin menambah stok.",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=keyboard,
         )
         return ConversationHandler.END
 
     context.user_data["product_id"] = product_id
     context.user_data["product"] = product
+    context.user_data["qty"] = 1
+    context.user_data["state"] = "detail"
 
-    buttons = []
-    max_qty = min(stock, 20) if stock else 20
-    for qty in [1, 2, 3, 5, 10]:
-        if qty <= max_qty:
-            total = product["price"] * qty
-            buttons.append([InlineKeyboardButton(
-                f"{qty} - Rp {format_rupiah(total)}",
-                callback_data=f"qty:{qty}",
-            )])
+    await _show_product_detail(query, product, 1, stock)
+    return JUMLAH
 
-    buttons.append([InlineKeyboardButton("Jumlah Lainnya", callback_data="qty:custom")])
-    buttons.append([InlineKeyboardButton("Kembali", callback_data=f"buy:{product_id}")])
 
+async def _show_product_detail(query, product, qty, stock):
+    total = product["price"] * qty
     stock_text = f"{stock} akun" if stock else "Unlimited"
+
+    detail = product.get("description", "")
+    detail_lines = detail.split("\n") if detail else []
+    detail_text = ""
+    if detail_lines:
+        detail_text = "\n".join(f"• {line.strip()}" for line in detail_lines if line.strip()) + "\n\n"
+
     text = (
-        f"*{product['name']}*\n\n"
-        f"{product.get('description', '')}\n"
-        f"Harga: *Rp {format_rupiah(product['price'])}/akun*\n"
-        f"Stok: *{stock_text}*\n\n"
-        "Pilih jumlah:"
+        f"*{product['name']}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"*Detail Produk*\n"
+        f"{detail_text}"
+        f"*Harga*\n"
+        f"Semua jumlah     : Rp {format_rupiah(product['price'])} / akun\n\n"
+        f"*Stok*\n"
+        f"• Tersedia : {stock_text}\n"
+        f"• Minimal : 1 akun\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"*Pesanan Anda*\n"
+        f"Jumlah      : {qty} akun\n"
+        f"Harga       : Rp {format_rupiah(product['price'])}\n"
+        f"Total Bayar : Rp {format_rupiah(total)}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━"
     )
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
-    context.user_data["state"] = "select_qty"
-    return JUMLAH
+    minus_disabled = qty <= 1
+    plus_disabled = stock is not None and qty >= stock
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➖", callback_data="cart:minus"),
+            InlineKeyboardButton(str(qty), callback_data="cart:noop"),
+            InlineKeyboardButton("➕", callback_data="cart:plus"),
+        ],
+        [InlineKeyboardButton("Ketik Jumlah Manual", callback_data="cart:input")],
+        [InlineKeyboardButton(f"Bayar via QRIS - Rp {format_rupiah(total)}", callback_data="cart:custom")],
+    ])
+
+    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
 
-async def handle_quick_qty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     if query is None:
         return JUMLAH
 
     await query.answer()
 
-    try:
-        qty = int(query.data.split(":")[1])
-    except (IndexError, ValueError):
-        return JUMLAH
-
-    return await _process_qty(query, context, qty)
-
-
-async def handle_custom_qty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    if query is None:
-        return JUMLAH
-
-    await query.answer()
-
-    product = context.user_data.get("product")
-    stock = db.get_stock_count(product["id"]) if product and product["stock_type"] == "limited" else None
-    stock_text = f"{stock} akun" if stock else "∞"
-
-    await query.edit_message_text(
-        f"*Masukkan Jumlah*\n\n"
-        f"Stok tersedia: *{stock_text}*\n"
-        f"Harga: *Rp {format_rupiah(product['price'])}/akun*\n\n"
-        f"Ketik jumlah akun (contoh: `7`):",
-        parse_mode=ParseMode.MARKDOWN,
-    )
-    return JUMLAH
-
-
-async def _process_qty(query_or_message, context, qty: int) -> int:
+    action = query.data.split(":")[1]
     product = context.user_data.get("product")
     if not product:
         return ConversationHandler.END
 
-    product_id = product["id"]
-    stock = db.get_stock_count(product_id) if product["stock_type"] == "limited" else None
+    qty = context.user_data.get("qty", 1)
+    stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
 
-    if stock is not None and qty > stock:
-        msg = query_or_message
-        if hasattr(msg, "edit_message_text"):
-            await msg.edit_message_text(
-                f"Stok tidak cukup. Tersedia: *{stock}* akun.",
-                parse_mode=ParseMode.MARKDOWN,
-            )
+    if action == "minus":
+        qty = max(1, qty - 1)
+    elif action == "plus":
+        max_qty = stock if stock else 999
+        qty = min(qty + 1, max_qty)
+    elif action == "input":
+        await query.edit_message_text(
+            f"*Masukkan Jumlah*\n\n"
+            f"Produk: *{product['name']}*\n"
+            f"Harga: *Rp {format_rupiah(product['price'])}/akun*\n"
+            f"Stok: *{stock if stock else '∞'}*\n\n"
+            f"Ketik jumlah (angka):",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        context.user_data["state"] = "input_qty"
         return JUMLAH
+    elif action == "custom":
+        await _show_confirm(query, context, product, qty)
+        return KONFIRMASI
 
-    total = product["price"] * qty
-    context.user_data["quantity"] = qty
-    context.user_data["total"] = total
-
-    confirm_keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("Konfirmasi & Bayar", callback_data="confirm:yes"),
-            InlineKeyboardButton("Batal", callback_data="confirm:no"),
-        ]
-    ])
-
-    text = (
-        f"*Pesanan Kamu*\n\n"
-        f"Produk: *{product['name']}*\n"
-        f"Jumlah: *{qty}* akun\n"
-        f"Harga: Rp {format_rupiah(product['price'])}/akun\n"
-        f"Total: *Rp {format_rupiah(total)}*\n\n"
-        "Klik *Konfirmasi & Bayar* untuk melanjutkan."
-    )
-
-    if hasattr(query_or_message, "edit_message_text"):
-        await query_or_message.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=confirm_keyboard)
-    else:
-        await query_or_message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=confirm_keyboard)
-
-    return KONFIRMASI
+    context.user_data["qty"] = qty
+    await _show_product_detail(query, product, qty, stock)
+    return JUMLAH
 
 
-async def receive_jumlah(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def receive_manual_jumlah(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message = update.message
     if message is None or message.text is None:
         return JUMLAH
@@ -254,50 +235,90 @@ async def receive_jumlah(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         qty = int(text)
     except ValueError:
-        await message.reply_text("Jumlah tidak valid. Masukkan angka >= 1. /cancel untuk batal.")
+        await message.reply_text("Masukkan angka yang valid. /cancel untuk batal.")
         return JUMLAH
 
     if qty < 1:
-        await message.reply_text("Jumlah minimal 1. /cancel untuk batal.")
+        await message.reply_text("Minimal 1 akun. /cancel untuk batal.")
         return JUMLAH
 
     product = context.user_data.get("product")
     if not product:
-        await message.reply_text("Sesi expired. Mulai lagi: /beli")
+        await message.reply_text("Sesi expired. /beli untuk mulai lagi.")
         return ConversationHandler.END
 
-    product_id = product["id"]
-    stock = db.get_stock_count(product_id) if product["stock_type"] == "limited" else None
-
+    stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
     if stock is not None and qty > stock:
         await message.reply_text(
-            f"Stok tidak cukup. Tersedia: *{stock}* akun.\n"
-            "Masukkan jumlah lebih kecil atau /cancel.",
+            f"Stok tidak cukup. Tersedia: *{stock}* akun.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return JUMLAH
 
-    total = product["price"] * qty
-    context.user_data["quantity"] = qty
-    context.user_data["total"] = total
+    context.user_data["qty"] = qty
 
-    confirm_keyboard = InlineKeyboardMarkup([
+    total = product["price"] * qty
+    stock_text = f"{stock} akun" if stock else "Unlimited"
+    detail = product.get("description", "")
+    detail_lines = detail.split("\n") if detail else []
+    detail_text = ""
+    if detail_lines:
+        detail_text = "\n".join(f"• {line.strip()}" for line in detail_lines if line.strip()) + "\n\n"
+
+    text = (
+        f"*{product['name']}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"*Detail Produk*\n"
+        f"{detail_text}"
+        f"*Harga*\n"
+        f"Semua jumlah     : Rp {format_rupiah(product['price'])} / akun\n\n"
+        f"*Stok*\n"
+        f"• Tersedia : {stock_text}\n"
+        f"• Minimal : 1 akun\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"*Pesanan Anda*\n"
+        f"Jumlah      : {qty} akun\n"
+        f"Harga       : Rp {format_rupiah(product['price'])}\n"
+        f"Total Bayar : Rp {format_rupiah(total)}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➖", callback_data="cart:minus"),
+            InlineKeyboardButton(str(qty), callback_data="cart:noop"),
+            InlineKeyboardButton("➕", callback_data="cart:plus"),
+        ],
+        [InlineKeyboardButton("Ketik Jumlah Manual", callback_data="cart:input")],
+        [InlineKeyboardButton(f"Bayar via QRIS - Rp {format_rupiah(total)}", callback_data="cart:custom")],
+    ])
+
+    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    return JUMLAH
+
+
+async def _show_confirm(query, context, product, qty):
+    total = product["price"] * qty
+
+    text = (
+        f"*Konfirmasi Pesanan*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Produk: *{product['name']}*\n"
+        f"Jumlah: *{qty}* akun\n"
+        f"Harga: Rp {format_rupiah(product['price'])}/akun\n"
+        f"Total: *Rp {format_rupiah(total)}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Lanjut ke pembayaran?"
+    )
+
+    keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("Konfirmasi & Bayar", callback_data="confirm:yes"),
             InlineKeyboardButton("Batal", callback_data="confirm:no"),
         ]
     ])
 
-    text = (
-        f"*Pesanan Kamu*\n\n"
-        f"Produk: *{product['name']}*\n"
-        f"Jumlah: *{qty}* akun\n"
-        f"Harga: Rp {format_rupiah(product['price'])}/akun\n"
-        f"Total: *Rp {format_rupiah(total)}*\n\n"
-        "Klik *Konfirmasi & Bayar* untuk melanjutkan."
-    )
-    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=confirm_keyboard)
-    return KONFIRMASI
+    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
 
 async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -312,43 +333,43 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if choice == "no":
         context.user_data.clear()
         uid = (update.effective_user.id or 0) if update.effective_user else 0
-        await query.edit_message_text(
-            "Dibatalkan.",
-            reply_markup=get_main_menu_keyboard(uid),
-        )
+        await query.edit_message_text("Dibatalkan.", reply_markup=get_main_menu_keyboard(uid))
         return ConversationHandler.END
 
     product = context.user_data.get("product")
-    quantity = context.user_data.get("quantity")
-    total = context.user_data.get("total")
+    quantity = context.user_data.get("qty", 1)
 
-    if not product or quantity is None or total is None:
+    if not product:
         context.user_data.clear()
         uid = (update.effective_user.id or 0) if update.effective_user else 0
-        await query.edit_message_text(
-            "Sesi order sudah berakhir. Mulai lagi:",
-            reply_markup=get_main_menu_keyboard(uid),
-        )
+        await query.edit_message_text("Sesi expired. Mulai lagi:", reply_markup=get_main_menu_keyboard(uid))
         return ConversationHandler.END
 
     user = update.effective_user
     if user is None:
         context.user_data.clear()
-        await query.edit_message_text("Gagal membuat order: user tidak dikenal.")
+        await query.edit_message_text("Gagal membuat order.")
         return ConversationHandler.END
 
-    order_id = f"ORD-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(2).upper()}"
+    total = product["price"] * quantity
+    qris_nominal = total + 500
+
+    from datetime import datetime as dt, timezone, timedelta
+    expires_at = (dt.now(tz=timezone(timedelta(hours=7))) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+
+    order_id = f"ORD-{dt.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2).upper()}"
 
     try:
-        db.create_order(order_id, user.id, user.username, user.first_name, quantity, total, product_id=product["id"])
+        db.create_order(
+            order_id, user.id, user.username, user.first_name,
+            quantity, total, product_id=product["id"],
+            qris_nominal=qris_nominal, expires_at=expires_at,
+        )
     except Exception as exc:
         logger.exception("Gagal membuat order: %s", exc)
         context.user_data.clear()
-        uid = (update.effective_user.id or 0) if update.effective_user else 0
-        await query.edit_message_text(
-            "Maaf, gagal membuat order. Coba lagi.",
-            reply_markup=get_main_menu_keyboard(uid),
-        )
+        uid = user.id or 0
+        await query.edit_message_text("Maaf, gagal membuat order. Coba lagi.", reply_markup=get_main_menu_keyboard(uid))
         return ConversationHandler.END
 
     qris_image_url = None
@@ -356,7 +377,7 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         try:
             result = await klikqris.get().create_qris(
                 order_id=order_id,
-                amount=total,
+                amount=qris_nominal,
                 keterangan=f"{product['name']} x{quantity}",
             )
             qris_data = result.get("data") or {}
@@ -372,12 +393,15 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if qris_image_url:
         caption = (
-            f"Order *#{order_id}* dibuat!\n\n"
-            f"Produk: *{product['name']}*\n"
-            f"Jumlah: *{quantity}* akun\n"
-            f"Total: *Rp {format_rupiah(total)}*\n\n"
-            "Scan QR di atas untuk bayar via QRIS.\n"
-            "Bot otomatis mengirim akun setelah pembayaran berhasil."
+            f"ORDER DIBUAT\n"
+            f"ID: {order_id}\n"
+            f"Produk: {product['name']}\n"
+            f"Jumlah: {quantity} akun\n"
+            f"Total Bayar: Rp {format_rupiah(total)}\n"
+            f"Nominal QRIS: Rp {format_rupiah(qris_nominal)}\n"
+            f"Status: menunggu pembayaran\n"
+            f"Expired: {expires_at}\n\n"
+            "Bayar memakai QRIS. Akun akan dikirim otomatis setelah pembayaran terdeteksi."
         )
         try:
             await query.delete_message()
@@ -387,13 +411,17 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             chat_id=user.id,
             photo=qris_image_url,
             caption=caption,
-            parse_mode=ParseMode.MARKDOWN,
         )
     else:
         text = (
-            f"Order *#{order_id}* dibuat!\n\n"
+            f"*ORDER DIBUAT*\n\n"
+            f"ID: `{order_id}`\n"
             f"Produk: *{product['name']}*\n"
-            f"Total: *Rp {format_rupiah(total)}*\n\n"
+            f"Jumlah: *{quantity}* akun\n"
+            f"Total Bayar: *Rp {format_rupiah(total)}*\n"
+            f"Nominal QRIS: *Rp {format_rupiah(qris_nominal)}*\n"
+            f"Status: menunggu pembayaran\n"
+            f"Expired: `{expires_at}`\n\n"
             "Pembayaran QRIS sedang diproses.\n"
             "Cek status di /myorders."
         )
@@ -424,29 +452,49 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await update.message.reply_text("Belum ada orderan.", reply_markup=keyboard)
             return
 
-        recent = orders[:20]
-        _STATUS_EMOJI = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦"}
+        _STATUS_EMOJI = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦", "waiting_payment": "⏳"}
+        recent = orders[:10]
+        lines = []
 
-        lines = ["*Riwayat Order*\n"]
         for o in recent:
             order_id = o.get("id", "")
             qty = o.get("quantity", 0)
             total = o.get("total", 0)
             status = o.get("status", "pending")
-            created_at = o.get("created_at", "")
             emoji = _STATUS_EMOJI.get(status, "⏳")
             product = db.get_product(o.get("product_id", 1))
             product_name = product["name"] if product else "N/A"
-            lines.append(f"#{order_id} | {product_name} x{qty} | Rp {format_rupiah(total)} | {emoji} {status}")
-            lines.append(str(created_at))
-            lines.append("")
+
+            created = o.get("created_at", "")
+            if created:
+                try:
+                    from datetime import datetime as dt
+                    dt_obj = dt.strptime(created, "%Y-%m-%d %H:%M:%S")
+                    created_wib = dt_obj.strftime("%d %B %Y pukul %H:%M WIB")
+                except Exception:
+                    created_wib = created
+            else:
+                created_wib = "-"
+
+            lines.append(
+                f"  {order_id}\n"
+                f"Produk: {product_name}\n"
+                f"Jumlah: {qty} akun\n"
+                f"Total: Rp {format_rupiah(total)}\n"
+                f"Status: {emoji} {status}\n"
+                f"Tanggal: {created_wib}\n"
+            )
 
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("Beli Lagi", callback_data="menu:produk")],
             [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
         ])
 
-        await update.message.reply_text("\n".join(lines).rstrip(), parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+        await update.message.reply_text(
+            "*Riwayat Order*\n\n" + "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
 
     except Exception as e:
         logger.exception("cmd_myorders error: %s", e)
