@@ -1,7 +1,8 @@
-"""SQLite database layer for VideoGen Bot.
+"""SQLite database layer for SWD x Videogen Bot.
 
 Tables:
-  - stock: email:password:balance entries ready to sell
+  - products: product catalog
+  - stock: email:password:balance entries ready to sell (linked to product)
   - orders: purchase records with QRIS payment tracking
   - users: Telegram users who interacted with the bot
 """
@@ -14,9 +15,22 @@ from pathlib import Path
 _conn: sqlite3.Connection | None = None
 
 _SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  price INTEGER NOT NULL DEFAULT 0,
+  stock_type TEXT DEFAULT 'limited',
+  stock_count INTEGER DEFAULT 0,
+  duration TEXT DEFAULT '',
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS stock (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  email TEXT NOT NULL UNIQUE,
+  product_id INTEGER DEFAULT 1,
+  email TEXT NOT NULL,
   password TEXT NOT NULL,
   balance TEXT DEFAULT '',
   status TEXT DEFAULT 'ready',
@@ -27,6 +41,7 @@ CREATE TABLE IF NOT EXISTS stock (
 
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
+  product_id INTEGER DEFAULT 1,
   user_id INTEGER NOT NULL,
   username TEXT,
   first_name TEXT,
@@ -44,6 +59,8 @@ CREATE TABLE IF NOT EXISTS users (
   first_name TEXT,
   last_seen TEXT DEFAULT (datetime('now'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_email ON stock(email);
 """
 
 
@@ -53,22 +70,104 @@ def _row_to_dict(row: sqlite3.Row | None) -> dict | None:
     return {key: row[key] for key in row.keys()}
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns/tables for existing databases."""
+    cursor = conn.execute("PRAGMA table_info(stock)")
+    cols = {row["name"] for row in cursor.fetchall()}
+    if "product_id" not in cols:
+        conn.execute("ALTER TABLE stock ADD COLUMN product_id INTEGER DEFAULT 1")
+
+    cursor = conn.execute("PRAGMA table_info(orders)")
+    cols = {row["name"] for row in cursor.fetchall()}
+    if "product_id" not in cols:
+        conn.execute("ALTER TABLE orders ADD COLUMN product_id INTEGER DEFAULT 1")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT DEFAULT '',
+          price INTEGER NOT NULL DEFAULT 0,
+          stock_type TEXT DEFAULT 'limited',
+          stock_count INTEGER DEFAULT 0,
+          duration TEXT DEFAULT '',
+          is_active INTEGER DEFAULT 1,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+
 def init_db(path: str) -> None:
     global _conn
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     _conn = sqlite3.connect(str(path), check_same_thread=False)
     _conn.row_factory = sqlite3.Row
+    _migrate(_conn)
     _conn.executescript(_SCHEMA_SQL)
     _conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Products
+# ---------------------------------------------------------------------------
+
+def add_product(name: str, description: str, price: int, stock_type: str = "limited",
+                stock_count: int = 0, duration: str = "") -> int:
+    assert _conn is not None
+    cur = _conn.execute(
+        """INSERT INTO products (name, description, price, stock_type, stock_count, duration)
+        VALUES (?, ?, ?, ?, ?, ?)""",
+        (name, description, price, stock_type, stock_count, duration),
+    )
+    _conn.commit()
+    return cur.lastrowid
+
+
+def get_product(product_id: int) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+    return _row_to_dict(row)
+
+
+def get_active_products() -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute("SELECT * FROM products WHERE is_active = 1 ORDER BY id ASC").fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_all_products() -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute("SELECT * FROM products ORDER BY id ASC").fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def update_product(product_id: int, **kwargs) -> bool:
+    assert _conn is not None
+    allowed = {"name", "description", "price", "stock_type", "stock_count", "duration", "is_active"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return False
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [product_id]
+    cur = _conn.execute(f"UPDATE products SET {set_clause} WHERE id = ?", vals)
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def delete_product(product_id: int) -> bool:
+    assert _conn is not None
+    cur = _conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
+    _conn.commit()
+    return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------
 # Stock management
 # ---------------------------------------------------------------------------
 
-def add_stock_batch(lines: list[str]) -> int:
-    """Parse lines of format email:password:balance and insert ready stock.
-    Returns count of successfully added entries."""
+def add_stock_batch(lines: list[str], product_id: int = 1) -> int:
+    """Parse lines of format email:password:balance and insert ready stock."""
     assert _conn is not None
     count = 0
     for line in lines:
@@ -85,8 +184,8 @@ def add_stock_batch(lines: list[str]) -> int:
             continue
         try:
             _conn.execute(
-                "INSERT OR IGNORE INTO stock (email, password, balance) VALUES (?, ?, ?)",
-                (email, password, balance),
+                "INSERT OR IGNORE INTO stock (product_id, email, password, balance) VALUES (?, ?, ?, ?)",
+                (product_id, email, password, balance),
             )
             count += 1
         except sqlite3.IntegrityError:
@@ -95,9 +194,15 @@ def add_stock_batch(lines: list[str]) -> int:
     return count
 
 
-def get_stock_count() -> int:
+def get_stock_count(product_id: int | None = None) -> int:
     assert _conn is not None
-    row = _conn.execute("SELECT COUNT(*) as cnt FROM stock WHERE status = 'ready'").fetchone()
+    if product_id is not None:
+        row = _conn.execute(
+            "SELECT COUNT(*) as cnt FROM stock WHERE status = 'ready' AND product_id = ?",
+            (product_id,),
+        ).fetchone()
+    else:
+        row = _conn.execute("SELECT COUNT(*) as cnt FROM stock WHERE status = 'ready'").fetchone()
     return row["cnt"] if row else 0
 
 
@@ -119,13 +224,12 @@ def get_total_users() -> int:
     return row["cnt"] if row else 0
 
 
-def take_stock(order_id: str, quantity: int) -> list[dict]:
-    """Atomically mark `quantity` stock items as sold and return them.
-    Uses a transaction to prevent race conditions."""
+def take_stock(order_id: str, quantity: int, product_id: int = 1) -> list[dict]:
+    """Atomically mark `quantity` stock items as sold and return them."""
     assert _conn is not None
     cur = _conn.execute(
-        "SELECT id, email, password, balance FROM stock WHERE status = 'ready' LIMIT ?",
-        (quantity,),
+        "SELECT id, email, password, balance FROM stock WHERE status = 'ready' AND product_id = ? LIMIT ?",
+        (product_id, quantity),
     )
     items = [_row_to_dict(r) for r in cur.fetchall()]
 
@@ -164,12 +268,13 @@ def create_order(
     first_name: str | None,
     quantity: int,
     total: int,
+    product_id: int = 1,
 ) -> None:
     assert _conn is not None
     _conn.execute(
-        """INSERT INTO orders (id, user_id, username, first_name, quantity, total)
-        VALUES (?, ?, ?, ?, ?, ?)""",
-        (order_id, user_id, username, first_name, quantity, total),
+        """INSERT INTO orders (id, product_id, user_id, username, first_name, quantity, total)
+        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (order_id, product_id, user_id, username, first_name, quantity, total),
     )
     _conn.commit()
 

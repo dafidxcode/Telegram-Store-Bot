@@ -1,7 +1,8 @@
 """Start, help, and menu command handlers with inline keyboard buttons."""
 
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timezone, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -12,26 +13,19 @@ import db
 
 logger = logging.getLogger(__name__)
 
-WIB_OFFSET = 7 * 3600
-
 
 def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
 
 def get_now_wib() -> str:
-    import time
-    now_utc = time.time() + WIB_OFFSET
-    from datetime import datetime as dt, timezone, timedelta
-    wib = dt.fromtimestamp(now_utc, tz=timezone(timedelta(hours=7)))
+    wib = datetime.now(tz=timezone(timedelta(hours=7)))
     day = wib.day
-    suffix = ["", "st", "nd", "rd"][day] if day % 100 not in (11, 12, 13) and day % 10 in (1, 2, 3) else "th"
-    return wib.strftime(f"%-d{suffix} %B %Y pukul %-H:%M WIB")
+    return wib.strftime(f"%-d %B %Y pukul %-H:%M WIB")
 
 
 def get_greeting() -> str:
-    from datetime import datetime as dt, timezone, timedelta
-    hour = (dt.now(tz=timezone(timedelta(hours=7)))).hour
+    hour = datetime.now(tz=timezone(timedelta(hours=7))).hour
     if 4 <= hour < 11:
         return "Selamat Pagi"
     elif 11 <= hour < 15:
@@ -42,7 +36,7 @@ def get_greeting() -> str:
         return "Selamat Malam"
 
 
-def build_home_text(user) -> tuple[str, dict]:
+def build_home_text(user) -> str:
     stock = db.get_stock_count()
     sold = db.get_total_sold()
     total_users = db.get_total_users()
@@ -50,7 +44,7 @@ def build_home_text(user) -> tuple[str, dict]:
     username = f"@{user.username}" if user.username else "Tidak ada"
     first_name = user.first_name or "teman"
 
-    text = (
+    return (
         f"{get_greeting()}, {first_name}!\n"
         f"{get_now_wib()}\n"
         f"\n"
@@ -71,20 +65,41 @@ def build_home_text(user) -> tuple[str, dict]:
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
         f"Mulai dari mana?\n"
-        f"Beli akun → Beli Sekarang\n"
+        f"Beli akun → Daftar Produk\n"
         f"Cek transaksi → Riwayat Order"
     )
-    return text, {"stock": stock, "sold": sold, "user_orders": user_orders}
+
+
+def build_products_text() -> str:
+    products = db.get_active_products()
+    if not products:
+        return "*Daftar Produk*\n\nBelum ada produk tersedia."
+
+    lines = ["*DAFTAR PRODUK*\n"]
+    for i, p in enumerate(products, 1):
+        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
+        duration = f"\nDurasi: {p['duration']}" if p.get("duration") else ""
+        desc = f"\n{p['description']}" if p.get("description") else ""
+
+        lines.append(
+            f"*{i}. {p['name']}* {'🔥' if i == 1 else ''}\n"
+            f"{desc}{duration}\n"
+            f"Harga: *Rp {format_rupiah(p['price'])}*\n"
+            f"Stok: *{stock}* {'Akun' if p['stock_type'] == 'limited' else ''}\n"
+        )
+
+    lines.append("Pilih produk untuk memesan:")
+    return "\n".join(lines)
 
 
 def get_main_menu_keyboard(user_id: int = 0):
     rows = [
+        [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
         [
-            InlineKeyboardButton("Beli Akun", callback_data="menu:beli"),
             InlineKeyboardButton("Cek Stok", callback_data="menu:stok"),
+            InlineKeyboardButton("Riwayat Order", callback_data="menu:orders"),
         ],
         [
-            InlineKeyboardButton("Riwayat Order", callback_data="menu:orders"),
             InlineKeyboardButton("Bantuan", callback_data="menu:help"),
         ],
     ]
@@ -98,6 +113,7 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("menu", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("stock", cmd_stock))
+    app.add_handler(CommandHandler("produk", cmd_produk))
     app.add_handler(CallbackQueryHandler(handle_menu_button, pattern=r"^menu:"))
 
 
@@ -112,8 +128,27 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as exc:
         logger.exception("Gagal upsert user %s: %s", user.id, exc)
 
-    text, _ = build_home_text(user)
+    text = build_home_text(user)
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu_keyboard(user.id))
+
+
+async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    message = update.message
+    if message is None:
+        return
+
+    text = build_products_text()
+    products = db.get_active_products()
+    buttons = []
+    for p in products:
+        buttons.append([InlineKeyboardButton(
+            f"{p['name']} - Rp {format_rupiah(p['price'])}",
+            callback_data=f"buy:{p['id']}",
+        )])
+    buttons.append([InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")])
+
+    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -128,12 +163,14 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
         "*Bantuan*\n\n"
         "*Cara Beli:*\n"
-        "1. Klik *Beli Akun*\n"
-        "2. Pilih jumlah akun\n"
-        "3. Konfirmasi & bayar via QRIS\n"
-        "4. Akun otomatis dikirim\n\n"
+        "1. Klik *Daftar Produk*\n"
+        "2. Pilih produk\n"
+        "3. Pilih jumlah\n"
+        "4. Konfirmasi & bayar via QRIS\n"
+        "5. Akun otomatis dikirim\n\n"
         "*Commands:*\n"
         "/start - Menu utama\n"
+        "/produk - Lihat produk\n"
         "/beli - Beli akun\n"
         "/stock - Cek stok\n"
         "/myorders - Riwayat order\n"
@@ -150,7 +187,7 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     stock = db.get_stock_count()
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Beli Akun", callback_data="menu:beli")],
+        [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
         [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
     ])
 
@@ -174,46 +211,26 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if action == "start":
         user = update.effective_user
-        text, _ = build_home_text(user)
+        text = build_home_text(user)
         uid = (user.id or 0) if user else 0
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu_keyboard(uid))
 
-    elif action == "beli":
-        stock = db.get_stock_count()
-        if stock <= 0:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
-            ])
-            await query.edit_message_text(
-                "Maaf, stok kosong. Silakan tunggu admin menambah stok.",
-                reply_markup=keyboard,
-            )
-            return
-
+    elif action == "produk":
+        text = build_products_text()
+        products = db.get_active_products()
         buttons = []
-        for qty in [1, 2, 3, 5, 10, 20]:
-            if qty <= stock:
-                total = config.HARGA_PER_AKUN * qty
-                buttons.append([InlineKeyboardButton(
-                    f"{qty} Akun - Rp {format_rupiah(total)}",
-                    callback_data=f"buy:{qty}",
-                )])
-
-        buttons.append([InlineKeyboardButton("Jumlah Lainnya", callback_data="buy:custom")])
+        for p in products:
+            buttons.append([InlineKeyboardButton(
+                f"{p['name']} - Rp {format_rupiah(p['price'])}",
+                callback_data=f"buy:{p['id']}",
+            )])
         buttons.append([InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")])
-
-        text = (
-            f"*Beli Akun*\n\n"
-            f"Harga: *Rp {config.HARGA_PER_AKUN:,}/akun*\n"
-            f"Stok tersedia: *{stock}* akun\n\n"
-            "Pilih jumlah:"
-        )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif action == "stok":
         stock = db.get_stock_count()
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Beli Akun", callback_data="menu:beli")],
+            [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
             [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
         ])
         text = (
@@ -236,7 +253,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await query.edit_message_text(
                     "Belum ada orderan. Yuk beli sekarang!",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Beli Akun", callback_data="menu:beli")],
+                        [InlineKeyboardButton("Daftar Produk", callback_data="menu:produk")],
                         [InlineKeyboardButton("Kembali ke Menu", callback_data="menu:start")],
                     ]),
                 )
@@ -270,6 +287,10 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ])
         await query.edit_message_text(
             "*Admin Panel*\n\n"
+            "/products - Lihat produk\n"
+            "/addproduct <nama> <harga> - Tambah produk\n"
+            "/editproduct <id> <field>=<value> - Edit produk\n"
+            "/delproduct <id> - Hapus produk\n"
             "/orders - Lihat order\n"
             "/stockinfo - Info stok\n"
             "/setprice <harga> - Ubah harga\n"
@@ -289,12 +310,14 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         text = (
             "*Bantuan*\n\n"
             "*Cara Beli:*\n"
-            "1. Klik *Beli Akun*\n"
-            "2. Pilih jumlah akun\n"
-            "3. Konfirmasi & bayar via QRIS\n"
-            "4. Akun otomatis dikirim\n\n"
+            "1. Klik *Daftar Produk*\n"
+            "2. Pilih produk\n"
+            "3. Pilih jumlah\n"
+            "4. Konfirmasi & bayar via QRIS\n"
+            "5. Akun otomatis dikirim\n\n"
             "*Commands:*\n"
             "/start - Menu utama\n"
+            "/produk - Lihat produk\n"
             "/beli - Beli akun\n"
             "/stock - Cek stok\n"
             "/myorders - Riwayat order\n"
