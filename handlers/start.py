@@ -573,11 +573,11 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         text = (
             "*➕ TAMBAH PRODUK*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Ketik perintah berikut:\n\n"
-            "`/addproduct NamaProduk Harga Deskripsi`\n\n"
+            "Format:\n"
+            "`/addproduct NamaProduk|Harga|Deskripsi`\n\n"
             "*Contoh:*\n"
-            "`/addproduct Leonardo 10000 Akun Leonardo AI`\n"
-            "`/addproduct GSuite 100000 GSuite 30 hari`\n\n"
+            "`/addproduct Leonardo|10000|Akun Leonardo AI`\n"
+            "`/addproduct GSuite|100000|GSuite 30 hari`\n\n"
             "Deskripsi bersifat opsional."
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())

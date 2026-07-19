@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import logging
 import secrets
@@ -49,6 +50,126 @@ def get_main_menu_keyboard(user_id: int = 0):
 
 def _cancel_button():
     return [InlineKeyboardButton("❌ Batalkan", callback_data="buy:cancel")]
+
+
+async def _create_order_and_pay(context, user, product, quantity, query=None, message=None):
+    """Shared logic: create order, call QRIS API, send QRIS image, or fallback text."""
+    total = product["price"] * quantity
+    qris_nominal = total + 500
+    expires_at = (datetime.now(tz=timezone(timedelta(hours=7))) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+    order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2).upper()}"
+
+    try:
+        db.create_order(
+            order_id, user.id, user.username, user.first_name,
+            quantity, total, product_id=product["id"],
+            qris_nominal=qris_nominal, expires_at=expires_at,
+        )
+    except Exception as exc:
+        logger.exception("Gagal membuat order: %s", exc)
+        uid = user.id or 0
+        text = "Maaf, gagal membuat order. Coba lagi."
+        if query:
+            await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(uid))
+        elif message:
+            await message.reply_text(text, reply_markup=get_main_menu_keyboard(uid))
+        return None, None
+
+    qris_image_url = None
+    if klikqris.is_active():
+        try:
+            result = await klikqris.get().create_qris(
+                order_id=order_id,
+                amount=qris_nominal,
+                keterangan=f"{product['name']} x{quantity}",
+            )
+            qris_data = result.get("data") or {}
+            qris_image_url = qris_data.get("qris_image") or qris_data.get("image_url") or qris_data.get("url")
+            db.set_order_qris_ref(order_id, order_id)
+            logger.info("QRIS created for %s — image: %s", order_id, bool(qris_image_url))
+            logger.debug("QRIS response data keys: %s", list(qris_data.keys()))
+        except klikqris.KlikQRISError as e:
+            logger.warning("KlikQRIS gagal untuk %s: %s", order_id, e)
+        except Exception as e:
+            logger.exception("Unexpected error QRIS %s: %s", order_id, e)
+
+    if query:
+        try:
+            await query.delete_message()
+        except Exception:
+            pass
+    elif message:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+    caption = (
+        f"✅ ORDER DIBUAT\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 ID: {order_id}\n"
+        f"📦 Produk: {product['name']}\n"
+        f"🔢 Jumlah: {quantity} akun\n"
+        f"💰 Total Bayar: Rp {format_rupiah(total)}\n"
+        f"💳 Nominal QRIS: Rp {format_rupiah(qris_nominal)}\n"
+        f"⏳ Status: menunggu pembayaran\n"
+        f"⏰ Expired: 30 menit\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📱 Scan QRIS di atas untuk bayar.\n"
+        "Akun dikirim otomatis setelah bayar. 🤖\n"
+        "Cek status: /myorders"
+    )
+
+    sent_msg = None
+    if qris_image_url:
+        try:
+            if qris_image_url.startswith("data:"):
+                header, b64data = qris_image_url.split(",", 1)
+                img_bytes = base64.b64decode(b64data)
+                photo_file = io.BytesIO(img_bytes)
+                photo_file.name = f"qris_{order_id}.png"
+                sent_msg = await context.bot.send_photo(
+                    chat_id=user.id,
+                    photo=photo_file,
+                    caption=caption,
+                )
+            else:
+                sent_msg = await context.bot.send_photo(
+                    chat_id=user.id,
+                    photo=qris_image_url,
+                    caption=caption,
+                )
+            logger.info("QRIS image sent for %s", order_id)
+        except Exception as e:
+            logger.warning("Gagal kirim QRIS image %s: %s. Fallback ke text.", order_id, e)
+            sent_msg = None
+
+    if sent_msg is None:
+        text = (
+            f"*✅ ORDER DIBUAT*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 ID: `{order_id}`\n"
+            f"📦 Produk: *{product['name']}*\n"
+            f"🔢 Jumlah: *{quantity}* akun\n"
+            f"💰 Total Bayar: *Rp {format_rupiah(total)}*\n"
+            f"💳 Nominal QRIS: *Rp {format_rupiah(qris_nominal)}*\n"
+            f"⏳ Status: menunggu pembayaran\n"
+            f"⏰ Expired: 30 menit\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Pembayaran QRIS sedang diproses. 🔄\n"
+            "Cek status di /myorders."
+        )
+        sent_msg = await context.bot.send_message(
+            chat_id=user.id,
+            text=text,
+            parse_mode=ParseMode.MARKDOWN,
+        )
+
+    if sent_msg:
+        db.set_order_qris_message_id(order_id, sent_msg.message_id)
+
+    context.user_data.clear()
+    return order_id, sent_msg
 
 
 def register(app: Application) -> None:
@@ -219,15 +340,29 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"Produk: *{product['name']}*\n"
             f"Harga: *Rp {format_rupiah(product['price'])}/akun*\n"
             f"Stok: *{stock if stock else '∞'}*\n\n"
-            f"Ketik jumlah (angka):\n"
-            f"Ketik /cancel untuk batal.",
+            f"Ketik jumlah (angka), lalu kirim.\n"
+            f"Contoh: ketik *5* untuk beli 5 akun.",
             parse_mode=ParseMode.MARKDOWN,
         )
         context.user_data["state"] = "input_qty"
         return JUMLAH
     elif action == "custom":
-        await _show_confirm(query, context, product, qty)
-        return KONFIRMASI
+        user = update.effective_user
+        if user is None:
+            return ConversationHandler.END
+
+        stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
+        if stock is not None and qty > stock:
+            await query.edit_message_text(
+                f"Stok tidak cukup. Tersedia: *{stock}* akun.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu_keyboard(user.id),
+            )
+            return ConversationHandler.END
+
+        await query.edit_message_text("⏳ Membuat order & QRIS...", parse_mode=ParseMode.MARKDOWN)
+        order_id, sent_msg = await _create_order_and_pay(context, user, product, qty, query=query)
+        return ConversationHandler.END
 
     context.user_data["qty"] = qty
     await _show_product_detail(query, product, qty, stock)
@@ -243,11 +378,11 @@ async def receive_manual_jumlah(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         qty = int(text)
     except ValueError:
-        await message.reply_text("Masukkan angka yang valid. /cancel untuk batal.")
+        await message.reply_text("Masukkan angka yang valid.")
         return JUMLAH
 
     if qty < 1:
-        await message.reply_text("Minimal 1 akun. /cancel untuk batal.")
+        await message.reply_text("Minimal 1 akun.")
         return JUMLAH
 
     product = context.user_data.get("product")
@@ -258,59 +393,23 @@ async def receive_manual_jumlah(update: Update, context: ContextTypes.DEFAULT_TY
     stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
     if stock is not None and qty > stock:
         await message.reply_text(
-            f"Stok tidak cukup. Tersedia: *{stock}* akun.",
+            f"Stok tidak cukup. Tersedia: *{stock}* akun.\n"
+            f"Ketik jumlah lain atau /cancel untuk batal.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return JUMLAH
 
-    context.user_data["qty"] = qty
-    await _show_product_detail(None, product, qty, stock, message)
-    return JUMLAH
+    user = update.effective_user
+    if user is None:
+        await message.reply_text("Gagal memproses.")
+        return ConversationHandler.END
 
-
-async def _show_product_detail(query_or_msg, product, qty, stock, msg=None):
-    total = product["price"] * qty
-    stock_text = f"{stock} akun" if stock else "Unlimited"
-
-    detail = product.get("description", "")
-    detail_lines = detail.split("\n") if detail else []
-    detail_text = ""
-    if detail_lines:
-        detail_text = "\n".join(f"• {line.strip()}" for line in detail_lines if line.strip()) + "\n\n"
-
-    text = (
-        f"*{product['name']}*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*📋 Detail Produk*\n"
-        f"{detail_text}"
-        f"*💰 Harga*\n"
-        f"Semua jumlah     : Rp {format_rupiah(product['price'])} / akun\n\n"
-        f"*📦 Stok*\n"
-        f"• Tersedia : {stock_text}\n"
-        f"• Minimal : 1 akun\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*🛒 Pesanan Anda*\n"
-        f"Jumlah      : {qty} akun\n"
-        f"Harga       : Rp {format_rupiah(product['price'])}\n"
-        f"Total Bayar : Rp {format_rupiah(total)}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━"
+    await message.reply_text(
+        f"⏳ Membuat order untuk *{product['name']}* x{qty}...",
+        parse_mode=ParseMode.MARKDOWN,
     )
-
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("➖", callback_data="cart:minus"),
-            InlineKeyboardButton(str(qty), callback_data="cart:noop"),
-            InlineKeyboardButton("➕", callback_data="cart:plus"),
-        ],
-        [InlineKeyboardButton("⌨️ Ketik Jumlah Manual", callback_data="cart:input")],
-        [InlineKeyboardButton(f"💳 Bayar via QRIS - Rp {format_rupiah(total)}", callback_data="cart:custom")],
-        _cancel_button(),
-    ])
-
-    if query_or_msg:
-        await query_or_msg.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
-    elif msg:
-        await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    order_id, sent_msg = await _create_order_and_pay(context, user, product, qty, message=message)
+    return ConversationHandler.END
 
 
 async def _show_confirm(query, context, product, qty):
@@ -374,80 +473,17 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.edit_message_text("Gagal membuat order.")
         return ConversationHandler.END
 
-    total = product["price"] * quantity
-    qris_nominal = total + 500
-
-    expires_at = (datetime.now(tz=timezone(timedelta(hours=7))) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
-    order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2).upper()}"
-
-    try:
-        db.create_order(
-            order_id, user.id, user.username, user.first_name,
-            quantity, total, product_id=product["id"],
-            qris_nominal=qris_nominal, expires_at=expires_at,
+    stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
+    if stock is not None and quantity > stock:
+        await query.edit_message_text(
+            f"Stok tidak cukup. Tersedia: *{stock}* akun.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_main_menu_keyboard(user.id),
         )
-    except Exception as exc:
-        logger.exception("Gagal membuat order: %s", exc)
-        context.user_data.clear()
-        uid = user.id or 0
-        await query.edit_message_text("Maaf, gagal membuat order. Coba lagi.", reply_markup=get_main_menu_keyboard(uid))
         return ConversationHandler.END
 
-    qris_image_url = None
-    if klikqris.is_active():
-        try:
-            result = await klikqris.get().create_qris(
-                order_id=order_id,
-                amount=qris_nominal,
-                keterangan=f"{product['name']} x{quantity}",
-            )
-            qris_data = result.get("data") or {}
-            qris_image_url = qris_data.get("qris_image")
-            db.set_order_qris_ref(order_id, order_id)
-            logger.info("QRIS created for %s", order_id)
-        except klikqris.KlikQRISError as e:
-            logger.warning("KlikQRIS gagal untuk %s: %s", order_id, e)
-        except Exception as e:
-            logger.exception("Unexpected error QRIS %s: %s", order_id, e)
-
-    context.user_data.clear()
-
-    if qris_image_url:
-        caption = (
-            f"✅ ORDER DIBUAT\n"
-            f"🆔 ID: {order_id}\n"
-            f"📦 Produk: {product['name']}\n"
-            f"🔢 Jumlah: {quantity} akun\n"
-            f"💰 Total Bayar: Rp {format_rupiah(total)}\n"
-            f"💳 Nominal QRIS: Rp {format_rupiah(qris_nominal)}\n"
-            f"⏳ Status: menunggu pembayaran\n"
-            f"⏰ Expired: {expires_at}\n\n"
-            "Bayar memakai QRIS. Akun akan dikirim otomatis setelah pembayaran terdeteksi. 🤖"
-        )
-        try:
-            await query.delete_message()
-        except Exception:
-            pass
-        await context.bot.send_photo(
-            chat_id=user.id,
-            photo=qris_image_url,
-            caption=caption,
-        )
-    else:
-        text = (
-            f"*✅ ORDER DIBUAT*\n\n"
-            f"🆔 ID: `{order_id}`\n"
-            f"📦 Produk: *{product['name']}*\n"
-            f"🔢 Jumlah: *{quantity}* akun\n"
-            f"💰 Total Bayar: *Rp {format_rupiah(total)}*\n"
-            f"💳 Nominal QRIS: *Rp {format_rupiah(qris_nominal)}*\n"
-            f"⏳ Status: menunggu pembayaran\n"
-            f"⏰ Expired: `{expires_at}`\n\n"
-            "Pembayaran QRIS sedang diproses. 🔄\n"
-            "Cek status di /myorders."
-        )
-        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-
+    await query.edit_message_text("⏳ Membuat order & QRIS...", parse_mode=ParseMode.MARKDOWN)
+    order_id, sent_msg = await _create_order_and_pay(context, user, product, quantity, query=query)
     return ConversationHandler.END
 
 

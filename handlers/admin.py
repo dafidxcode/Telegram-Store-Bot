@@ -90,30 +90,40 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _deny_non_admin(update)
         return
 
-    args = context.args or []
-    if len(args) < 2:
+    raw = update.message.text.replace("/addproduct", "").strip() if update.message.text else ""
+    if not raw or "|" not in raw:
         await update.message.reply_text(
             "*➕ TAMBAH PRODUK*\n\n"
-            "Gunakan: `/addproduct <nama> <harga> [deskripsi]`\n\n"
+            "Format: `/addproduct NamaProduk|Harga|Deskripsi`\n\n"
             "*Contoh:*\n"
-            "`/addproduct Leonardo 10000 Akun Leonardo AI`\n"
-            "`/addproduct GSuite 100000 GSuite durasi 30 hari`",
+            "`/addproduct Leonardo|10000|Akun Leonardo AI`\n"
+            "`/addproduct GSuite|100000|GSuite durasi 30 hari`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
         return
 
-    name = args[0]
-    try:
-        price = int(args[1])
-    except ValueError:
+    parts = [p.strip() for p in raw.split("|")]
+    name = parts[0]
+    if not name:
         await update.message.reply_text(
-            "Harga harus berupa angka.",
+            "Nama produk tidak boleh kosong.",
             reply_markup=_admin_back_keyboard(),
         )
         return
 
-    description = " ".join(args[2:]) if len(args) > 2 else ""
+    try:
+        price = int(parts[1])
+    except (IndexError, ValueError):
+        await update.message.reply_text(
+            "Harga harus berupa angka.\n\n"
+            "Format: `/addproduct NamaProduk|Harga|Deskripsi`",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+        return
+
+    description = parts[2] if len(parts) > 2 else ""
 
     product_id = db.add_product(name=name, description=description, price=price)
     await update.message.reply_text(

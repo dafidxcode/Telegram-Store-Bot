@@ -8,9 +8,10 @@ Saat status berubah jadi 'paid':
   5. Notifikasi admin
 
 Saat status 'expired'/'failed':
-  1. Update order status
-  2. Release stock kembali
-  3. Notifikasi user
+  1. Hapus QRIS image dari chat
+  2. Update order status
+  3. Release stock kembali
+  4. Kirim user ke menu utama
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from __future__ import annotations
 import io
 import logging
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 import config
@@ -31,6 +33,20 @@ POLL_INTERVAL = 10
 
 def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
+
+
+def _get_main_menu_keyboard(user_id: int = 0):
+    rows = [
+        [InlineKeyboardButton("🛍️ Daftar Produk", callback_data="menu:produk")],
+        [
+            InlineKeyboardButton("📦 Cek Stok", callback_data="menu:stok"),
+            InlineKeyboardButton("📋 Riwayat Order", callback_data="menu:orders"),
+        ],
+        [InlineKeyboardButton("❓ Bantuan", callback_data="menu:help")],
+    ]
+    if user_id in config.ADMIN_IDS:
+        rows.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu:admin")])
+    return InlineKeyboardMarkup(rows)
 
 
 async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -84,12 +100,14 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                 txt_file.name = f"akun_{order_id}.txt"
 
                 caption = (
-                    f"Pembayaran berhasil!\n\n"
-                    f"Order: #{order_id}\n"
-                    f"Jumlah: {quantity} akun\n"
-                    f"Total: Rp {format_rupiah(order['total'])}\n\n"
-                    f"File berisi akun kamu ada di lampiran.\n"
-                    f"Simpan baik-baik!"
+                    f"✅ PEMBAYARAN BERHASIL!\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🆔 Order: #{order_id}\n"
+                    f"🔢 Jumlah: {quantity} akun\n"
+                    f"💰 Total: Rp {format_rupiah(order['total'])}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"📁 File akun kamu ada di lampiran.\n"
+                    f"Simpan baik-baik! 🔐"
                 )
 
                 try:
@@ -106,7 +124,7 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                         await bot.send_message(
                             chat_id=admin_id,
                             text=(
-                                f"Order *#{order_id}* dibayar & dikirim!\n"
+                                f"✅ Order *#{order_id}* dibayar & dikirim!\n"
                                 f"User: @{order.get('username', 'N/A')}\n"
                                 f"Jumlah: {quantity} akun\n"
                                 f"Status: Dikirim"
@@ -131,7 +149,7 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                         await bot.send_message(
                             chat_id=admin_id,
                             text=(
-                                f"WARNING: Order *#{order_id}* dibayar tapi STOK KOSONG!\n"
+                                f"⚠️ WARNING: Order *#{order_id}* dibayar tapi STOK KOSONG!\n"
                                 f"User: @{order.get('username', 'N/A')}\n"
                                 f"Jumlah: {quantity} akun\n"
                                 f"Harap proses manual!"
@@ -145,15 +163,27 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
             db.update_order_status(order_id, "cancelled")
             released = db.release_stock(order_id)
             logger.info("Order %s CANCELLED via poller (%s), released %d stock", order_id, payment_status, released)
+
+            user_id = order["user_id"]
+            qris_msg_id = order.get("qris_message_id")
+
+            if qris_msg_id:
+                try:
+                    await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+                    logger.info("Deleted QRIS message %s for order %s", qris_msg_id, order_id)
+                except Exception as e:
+                    logger.warning("Gagal hapus QRIS message %s: %s", qris_msg_id, e)
+
             try:
                 await bot.send_message(
-                    chat_id=order["user_id"],
+                    chat_id=user_id,
                     text=(
-                        f"Order *#{order_id}* kadaluarsa/dibatalkan "
-                        f"(status: {payment_status}).\n"
-                        f"Buat order baru di /beli."
+                        f"❌ Order *#{order_id}* kadaluarsa/dibatalkan\n"
+                        f"(status: {payment_status})\n\n"
+                        f"Buat order baru di bawah 👇"
                     ),
                     parse_mode="Markdown",
+                    reply_markup=_get_main_menu_keyboard(user_id),
                 )
             except Exception as e:
-                logger.warning("Gagal notif user %s: %s", order["user_id"], e)
+                logger.warning("Gagal notif user %s: %s", user_id, e)

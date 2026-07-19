@@ -87,6 +87,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE orders ADD COLUMN qris_nominal INTEGER DEFAULT 0")
     if "expires_at" not in cols:
         conn.execute("ALTER TABLE orders ADD COLUMN expires_at TEXT")
+    if "qris_message_id" not in cols:
+        conn.execute("ALTER TABLE orders ADD COLUMN qris_message_id INTEGER")
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS products (
@@ -336,6 +338,16 @@ def set_order_qris_ref(order_id: str, qris_ref: str) -> bool:
     cur = _conn.execute(
         "UPDATE orders SET qris_ref = ? WHERE id = ?",
         (qris_ref, order_id),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def set_order_qris_message_id(order_id: str, message_id: int) -> bool:
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE orders SET qris_message_id = ? WHERE id = ?",
+        (message_id, order_id),
     )
     _conn.commit()
     return cur.rowcount > 0
