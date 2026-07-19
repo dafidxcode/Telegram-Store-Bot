@@ -109,8 +109,8 @@ def init_db(path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     _conn = sqlite3.connect(str(path), check_same_thread=False)
     _conn.row_factory = sqlite3.Row
-    _migrate(_conn)
     _conn.executescript(_SCHEMA_SQL)
+    _migrate(_conn)
     _conn.commit()
 
 
