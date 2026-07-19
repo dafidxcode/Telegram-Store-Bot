@@ -1,17 +1,17 @@
 """Admin command handlers.
 
-- /addproduct - Tambah produk baru
-- /editproduct - Edit produk
-- /delproduct - Hapus produk
-- /products - Lihat semua produk
-- /addstock - Upload .txt file atau paste stock
-- /stockinfo - Lihat info stok
-- /orders - Lihat order terbaru + ubah status
-- /broadcast - Kirim pesan ke semua user
-- /setprice - Ubah harga per akun
-- /addadmin - Tambah admin
-- /removeadmin - Hapus admin
-- /adminlist - Lihat daftar admin
+- /addproduct - Add new product
+- /editproduct - Edit product
+- /delproduct - Delete product
+- /products - View all products
+- /addstock - Upload .txt file or paste stock
+- /stockinfo - View stock info
+- /orders - View recent orders + change status
+- /broadcast - Send message to all users
+- /setprice - Change price per account
+- /addadmin - Add admin
+- /removeadmin - Remove admin
+- /adminlist - View admin list
 """
 
 import logging
@@ -51,7 +51,7 @@ async def _deny_non_admin(update: Update) -> None:
     message = update.effective_message
     if message is None:
         return
-    await message.reply_text("Perintah ini khusus admin.")
+    await message.reply_text("This command is for admins only.")
 
 
 def format_rupiah(n: int) -> str:
@@ -60,8 +60,8 @@ def format_rupiah(n: int) -> str:
 
 def _admin_back_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Kembali ke Admin Panel", callback_data="menu:admin")],
-        [InlineKeyboardButton("🏠 Kembali ke Menu", callback_data="menu:start")],
+        [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
+        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
     ])
 
 
@@ -92,11 +92,11 @@ async def handle_quick_addproduct(update: Update, context: ContextTypes.DEFAULT_
 
     product_id = db.add_product(name=name, description=description, price=price)
     await message.reply_text(
-        f"*✅ Produk ditambahkan!*\n\n"
+        f"*✅ Product added!*\n\n"
         f"🆔 ID: `{product_id}`\n"
-        f"📦 Nama: *{name}*\n"
-        f"💰 Harga: *Rp {format_rupiah(price)}*\n"
-        f"📝 Deskripsi: {description or '-'}",
+        f"📦 Name: *{name}*\n"
+        f"💰 Price: *Rp {format_rupiah(price)}*\n"
+        f"📝 Description: {description or '-'}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -145,11 +145,11 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     raw = update.message.text.replace("/addproduct", "").strip() if update.message.text else ""
     if not raw or "|" not in raw:
         await update.message.reply_text(
-            "*➕ TAMBAH PRODUK*\n\n"
-            "Format: `/addproduct NamaProduk|Harga|Deskripsi`\n\n"
-            "*Contoh:*\n"
-            "`/addproduct Leonardo|10000|Akun Leonardo AI`\n"
-            "`/addproduct GSuite|100000|GSuite durasi 30 hari`",
+            "*➕ ADD PRODUCT*\n\n"
+            "Format: `/addproduct ProductName|Price|Description`\n\n"
+            "*Examples:*\n"
+            "`/addproduct Leonardo|10000|Leonardo AI Account`\n"
+            "`/addproduct GSuite|100000|GSuite 30 days`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -159,7 +159,7 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     name = parts[0]
     if not name:
         await update.message.reply_text(
-            "Nama produk tidak boleh kosong.",
+            "Product name cannot be empty.",
             reply_markup=_admin_back_keyboard(),
         )
         return
@@ -168,8 +168,8 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         price = int(parts[1])
     except (IndexError, ValueError):
         await update.message.reply_text(
-            "Harga harus berupa angka.\n\n"
-            "Format: `/addproduct NamaProduk|Harga|Deskripsi`",
+            "Price must be a number.\n\n"
+            "Format: `/addproduct ProductName|Price|Description`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -179,11 +179,11 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     product_id = db.add_product(name=name, description=description, price=price)
     await update.message.reply_text(
-        f"*✅ Produk ditambahkan!*\n\n"
+        f"*✅ Product added!*\n\n"
         f"🆔 ID: `{product_id}`\n"
-        f"📦 Nama: *{name}*\n"
-        f"💰 Harga: *Rp {format_rupiah(price)}*\n"
-        f"📝 Deskripsi: {description or '-'}",
+        f"📦 Name: *{name}*\n"
+        f"💰 Price: *Rp {format_rupiah(price)}*\n"
+        f"📝 Description: {description or '-'}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -197,13 +197,13 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     args = context.args or []
     if len(args) < 2:
         await update.message.reply_text(
-            "*✏️ EDIT PRODUK*\n\n"
-            "Gunakan: `/editproduct <id> <field>=<value>`\n\n"
-            "*Field:* name, price, description, stock_type, stock_count, duration, is_active\n\n"
-            "*Contoh:*\n"
+            "*✏️ EDIT PRODUCT*\n\n"
+            "Use: `/editproduct <id> <field>=<value>`\n\n"
+            "*Fields:* name, price, description, stock_type, stock_count, duration, is_active\n\n"
+            "*Examples:*\n"
             "`/editproduct 1 price=15000`\n"
             "`/editproduct 1 name=Leonardo Pro`\n"
-            "`/editproduct 1 is_active=0` (nonaktifkan)",
+            "`/editproduct 1 is_active=0` (deactivate)",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -213,7 +213,7 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         product_id = int(args[0])
     except ValueError:
         await update.message.reply_text(
-            "ID harus angka.",
+            "ID must be a number.",
             reply_markup=_admin_back_keyboard(),
         )
         return
@@ -221,7 +221,7 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     product = db.get_product(product_id)
     if not product:
         await update.message.reply_text(
-            f"Produk ID `{product_id}` tidak ditemukan.",
+            f"Product ID `{product_id}` not found.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -244,7 +244,7 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if not kwargs:
         await update.message.reply_text(
-            "Tidak ada perubahan. Gunakan field=value.",
+            "No changes made. Use field=value.",
             reply_markup=_admin_back_keyboard(),
         )
         return
@@ -252,12 +252,12 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     db.update_product(product_id, **kwargs)
     updated = db.get_product(product_id)
     await update.message.reply_text(
-        f"*✅ Produk diupdate!*\n\n"
+        f"*✅ Product updated!*\n\n"
         f"🆔 ID: `{product_id}`\n"
-        f"📦 Nama: *{updated['name']}*\n"
-        f"💰 Harga: *Rp {format_rupiah(updated['price'])}*\n"
-        f"📦 Stok: {updated['stock_type']} ({updated['stock_count']})\n"
-        f"{'✅ Aktif' if updated['is_active'] else '❌ Nonaktif'}",
+        f"📦 Name: *{updated['name']}*\n"
+        f"💰 Price: *Rp {format_rupiah(updated['price'])}*\n"
+        f"📦 Stock: {updated['stock_type']} ({updated['stock_count']})\n"
+        f"{'✅ Active' if updated['is_active'] else '❌ Inactive'}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -271,7 +271,7 @@ async def cmd_delproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     args = context.args or []
     if not args:
         await update.message.reply_text(
-            "Gunakan: `/delproduct <id>`",
+            "Use: `/delproduct <id>`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -281,7 +281,7 @@ async def cmd_delproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         product_id = int(args[0])
     except ValueError:
         await update.message.reply_text(
-            "ID harus angka.",
+            "ID must be a number.",
             reply_markup=_admin_back_keyboard(),
         )
         return
@@ -289,7 +289,7 @@ async def cmd_delproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     product = db.get_product(product_id)
     if not product:
         await update.message.reply_text(
-            f"Produk ID `{product_id}` tidak ditemukan.",
+            f"Product ID `{product_id}` not found.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -297,8 +297,8 @@ async def cmd_delproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     db.delete_product(product_id)
     await update.message.reply_text(
-        f"*🗑️ Produk dihapus!*\n\n"
-        f"📦 Nama: *{product['name']}*",
+        f"*🗑️ Product deleted!*\n\n"
+        f"📦 Name: *{product['name']}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -312,20 +312,20 @@ async def cmd_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     products = db.get_all_products()
     if not products:
         await update.message.reply_text(
-            "*📦 DAFTAR PRODUK*\n\nBelum ada produk.",
+            "*📦 PRODUCT LIST*\n\nNo products yet.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
         return
 
-    lines = ["*📦 DAFTAR PRODUK*\n"]
+    lines = ["*📦 PRODUCT LIST*\n"]
     for p in products:
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
         status = "✅" if p["is_active"] else "❌"
         lines.append(
             f"{status} #{p['id']} | *{p['name']}*\n"
-            f"   💰 Harga: Rp {format_rupiah(p['price'])}\n"
-            f"   📦 Stok: {stock}\n"
+            f"   💰 Price: Rp {format_rupiah(p['price'])}\n"
+            f"   📦 Stock: {stock}\n"
         )
 
     await update.message.reply_text(
@@ -349,11 +349,11 @@ async def cmd_addstock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     await message.reply_text(
-        "*📥 TAMBAH STOK*\n\n"
-        "*Cara 1:* Kirim file .txt dengan format per baris:\n"
+        "*📥 ADD STOCK*\n\n"
+        "*Method 1:* Send a .txt file with format per line:\n"
         "`email:password:balance`\n\n"
-        "*Cara 2:* Paste langsung daftar akun di chat (satu akun per baris)\n\n"
-        "Kirim sekarang! 📤",
+        "*Method 2:* Paste account list directly in chat (one account per line)\n\n"
+        "Send now! 📤",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -369,10 +369,10 @@ async def cmd_addstock_txt(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     await message.reply_text(
-        "*📥 TAMBAH STOK*\n\n"
-        "Kirim file .txt dengan format per baris:\n"
+        "*📥 ADD STOCK*\n\n"
+        "Send a .txt file with format per line:\n"
         "`email:password:balance`\n\n"
-        "Atau paste langsung di chat:\n"
+        "Or paste directly in chat:\n"
         "`email1:pass1:balance1`\n"
         "`email2:pass2:balance2`",
         parse_mode=ParseMode.MARKDOWN,
@@ -391,7 +391,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     doc = message.document
     if doc.mime_type and "text" not in doc.mime_type and not doc.file_name.endswith(".txt"):
         await message.reply_text(
-            "Hanya file .txt yang diterima.",
+            "Only .txt files are accepted.",
             reply_markup=_admin_back_keyboard(),
         )
         return
@@ -402,9 +402,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         text = content.decode("utf-8", errors="replace")
         lines = text.splitlines()
     except Exception as e:
-        logger.exception("Gagal download file: %s", e)
+        logger.exception("Failed to download file: %s", e)
         await message.reply_text(
-            "Gagal membaca file. Coba lagi.",
+            "Failed to read file. Please try again.",
             reply_markup=_admin_back_keyboard(),
         )
         return
@@ -413,9 +413,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     stock = db.get_stock_count()
 
     await message.reply_text(
-        f"*✅ Stok berhasil ditambahkan!*\n\n"
-        f"📥 Ditambah: *{count}* akun\n"
-        f"📦 Total stok: *{stock}* akun",
+        f"*✅ Stock added successfully!*\n\n"
+        f"📥 Added: *{count}* accounts\n"
+        f"📦 Total stock: *{stock}* accounts",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -431,10 +431,10 @@ async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     products = db.get_active_products()
 
     text = (
-        f"*📊 INFO STOK*\n"
+        f"*📊 STOCK INFO*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 Stok Ready: *{stock}* akun\n"
-        f"⏳ Order Pending: *{pending}*\n"
+        f"📦 Ready Stock: *{stock}* accounts\n"
+        f"⏳ Pending Orders: *{pending}*\n"
     )
     for p in products:
         p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
@@ -461,22 +461,22 @@ async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         orders = db.get_all_orders(limit=20, status=status_filter)
     except Exception as exc:
-        logger.exception("Gagal get_all_orders: %s", exc)
+        logger.exception("Failed get_all_orders: %s", exc)
         await message.reply_text(
-            "Maaf, ada masalah. Coba lagi.",
+            "Sorry, something went wrong. Please try again.",
             reply_markup=_admin_back_keyboard(),
         )
         return
 
     if not orders:
         await message.reply_text(
-            "*📋 ORDER TERBARU*\n\nBelum ada order.",
+            "*📋 RECENT ORDERS*\n\nNo orders yet.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
         return
 
-    lines = [f"*📋 ORDER TERBARU* ({len(orders)})\n"]
+    lines = [f"*📋 RECENT ORDERS* ({len(orders)})\n"]
 
     for o in orders:
         username = o.get("username") or "no_user"
@@ -494,12 +494,12 @@ async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
 
     filter_buttons = [
-        InlineKeyboardButton("📋 Semua", callback_data="admin:orders"),
+        InlineKeyboardButton("📋 All", callback_data="admin:orders"),
         InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
         InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
     ]
     keyboard_rows = [filter_buttons]
-    keyboard_rows.append([InlineKeyboardButton("⬅️ Kembali ke Admin Panel", callback_data="menu:admin")])
+    keyboard_rows.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
 
     await message.reply_text(
         "\n".join(lines),
@@ -516,10 +516,10 @@ async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     args = context.args or []
     if not args:
         await update.message.reply_text(
-            f"*💰 UBAH HARGA*\n\n"
-            f"Harga saat ini: *Rp {config.HARGA_PER_AKUN:,}/akun*\n\n"
-            f"Gunakan: `/setprice <harga_baru>`\n\n"
-            f"*Contoh:* `/setprice 15000`",
+            f"*💰 CHANGE PRICE*\n\n"
+            f"Current price: *Rp {config.HARGA_PER_AKUN:,}/account*\n\n"
+            f"Use: `/setprice <new_price>`\n\n"
+            f"*Example:* `/setprice 15000`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -529,22 +529,22 @@ async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         new_price = int(args[0].replace(".", "").replace(",", ""))
     except ValueError:
         await update.message.reply_text(
-            "Harga harus berupa angka.",
+            "Price must be a number.",
             reply_markup=_admin_back_keyboard(),
         )
         return
 
     if new_price <= 0:
         await update.message.reply_text(
-            "Harga harus lebih dari 0.",
+            "Price must be greater than 0.",
             reply_markup=_admin_back_keyboard(),
         )
         return
 
     config.HARGA_PER_AKUN = new_price
     await update.message.reply_text(
-        f"*✅ Harga diubah!*\n\n"
-        f"Harga baru: *Rp {new_price:,}/akun*",
+        f"*✅ Price updated!*\n\n"
+        f"New price: *Rp {new_price:,}/account*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -563,9 +563,9 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not text:
         await message.reply_text(
             "*📣 BROADCAST*\n\n"
-            "Kirim pesan ke semua user.\n\n"
-            "Gunakan: `/broadcast <pesan>`\n\n"
-            "*Contoh:* `/broadcast Promo weekend diskon 20%!`",
+            "Send a message to all users.\n\n"
+            "Use: `/broadcast <message>`\n\n"
+            "*Example:* `/broadcast Weekend promo 20% off!`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -574,9 +574,9 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         user_ids = db.get_all_user_ids()
     except Exception as exc:
-        logger.exception("Gagal get_all_user_ids: %s", exc)
+        logger.exception("Failed get_all_user_ids: %s", exc)
         await message.reply_text(
-            "Maaf, ada masalah. Coba lagi.",
+            "Sorry, something went wrong. Please try again.",
             reply_markup=_admin_back_keyboard(),
         )
         return
@@ -591,9 +591,9 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             failed += 1
 
     await message.reply_text(
-        f"*✅ Broadcast selesai!*\n\n"
-        f"📤 Terkirim: *{success}* user\n"
-        f"❌ Gagal: *{failed}* user",
+        f"*✅ Broadcast complete!*\n\n"
+        f"📤 Sent: *{success}* users\n"
+        f"❌ Failed: *{failed}* users",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -607,10 +607,10 @@ async def cmd_addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     args = context.args or []
     if not args:
         await update.message.reply_text(
-            "*👤 TAMBAH ADMIN*\n\n"
-            "Gunakan: `/addadmin <telegram_user_id>`\n\n"
-            "*Contoh:* `/addadmin 123456789`\n\n"
-            "💡 Untuk cari ID: Forward pesan ke @userinfobot",
+            "*👤 ADD ADMIN*\n\n"
+            "Use: `/addadmin <telegram_user_id>`\n\n"
+            "*Example:* `/addadmin 123456789`\n\n"
+            "💡 To find ID: Forward a message to @userinfobot",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -620,14 +620,14 @@ async def cmd_addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         new_admin_id = int(args[0])
     except ValueError:
         await update.message.reply_text(
-            "ID harus berupa angka.",
+            "ID must be a number.",
             reply_markup=_admin_back_keyboard(),
         )
         return
 
     if new_admin_id in config.ADMIN_IDS:
         await update.message.reply_text(
-            f"ID `{new_admin_id}` sudah menjadi admin.",
+            f"ID `{new_admin_id}` is already an admin.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -635,9 +635,9 @@ async def cmd_addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     config.ADMIN_IDS.add(new_admin_id)
     await update.message.reply_text(
-        f"*✅ Admin ditambahkan!*\n\n"
+        f"*✅ Admin added!*\n\n"
         f"🆔 ID: `{new_admin_id}`\n"
-        f"👥 Total admin: *{len(config.ADMIN_IDS)}*",
+        f"👥 Total admins: *{len(config.ADMIN_IDS)}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -651,9 +651,9 @@ async def cmd_removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     args = context.args or []
     if not args:
         await update.message.reply_text(
-            "*👤 HAPUS ADMIN*\n\n"
-            "Gunakan: `/removeadmin <telegram_user_id>`\n\n"
-            "⚠️ Tidak bisa menghapus admin utama.",
+            "*👤 REMOVE ADMIN*\n\n"
+            "Use: `/removeadmin <telegram_user_id>`\n\n"
+            "⚠️ Cannot remove the main admin.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -663,21 +663,21 @@ async def cmd_removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         remove_id = int(args[0])
     except ValueError:
         await update.message.reply_text(
-            "ID harus berupa angka.",
+            "ID must be a number.",
             reply_markup=_admin_back_keyboard(),
         )
         return
 
     if remove_id == config.ADMIN_USER_ID:
         await update.message.reply_text(
-            "Tidak bisa menghapus admin utama.",
+            "Cannot remove the main admin.",
             reply_markup=_admin_back_keyboard(),
         )
         return
 
     if remove_id not in config.ADMIN_IDS:
         await update.message.reply_text(
-            f"ID `{remove_id}` bukan admin.",
+            f"ID `{remove_id}` is not an admin.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
@@ -685,9 +685,9 @@ async def cmd_removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     config.ADMIN_IDS.discard(remove_id)
     await update.message.reply_text(
-        f"*✅ Admin dihapus!*\n\n"
+        f"*✅ Admin removed!*\n\n"
         f"🆔 ID: `{remove_id}`\n"
-        f"👥 Total admin: *{len(config.ADMIN_IDS)}*",
+        f"👥 Total admins: *{len(config.ADMIN_IDS)}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -698,12 +698,12 @@ async def cmd_adminlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _deny_non_admin(update)
         return
 
-    lines = ["*👥 DAFTAR ADMIN*\n"]
+    lines = ["*👥 ADMIN LIST*\n"]
     for i, admin_id in enumerate(sorted(config.ADMIN_IDS), 1):
         is_main = " ⭐" if admin_id == config.ADMIN_USER_ID else ""
         lines.append(f"{i}. `{admin_id}`{is_main}")
 
-    lines.append(f"\n📊 Total: *{len(config.ADMIN_IDS)}* admin")
+    lines.append(f"\n📊 Total: *{len(config.ADMIN_IDS)}* admins")
 
     await update.message.reply_text(
         "\n".join(lines),
