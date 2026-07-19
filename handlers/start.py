@@ -41,30 +41,32 @@ def build_home_text(user) -> str:
     user_orders = db.get_user_order_count(user.id)
     username = f"@{user.username}" if user.username else "N/A"
     first_name = user.first_name or "friend"
+    active_products = db.get_active_products()
+    product_count = len(active_products)
 
     return (
-        f"{get_greeting()}, {first_name}! 🌟\n"
+        f"{get_greeting()}, {first_name}!\n"
         f"📅 {get_now_wib()}\n"
         f"\n"
-        f"Welcome to *{config.SHOP_NAME}*.\n"
+        f"Selamat datang di *{config.SHOP_NAME}*.\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"📊 ACCOUNT STATS\n"
-        f"👤 Username : {username}\n"
-        f"🆔 ID : {user.id}\n"
-        f"🛒 Total Orders : {user_orders} transactions\n"
+        f"*👤 STATISTIK AKUN*\n"
+        f"Username : {username}\n"
+        f"ID : {user.id}\n"
+        f"📦 Total Order : {user_orders} transaksi\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"📊 BOT STATS\n"
-        f"✅ Accounts Sold : {sold}\n"
-        f"💰 Price : Rp {format_rupiah(config.HARGA_PER_AKUN)}/account\n"
-        f"📦 Stock : {stock}\n"
-        f"👥 Total Users : {total_users}\n"
+        f"*📊 STATISTIK BOT*\n"
+        f"📨 Akun Terjual : {sold}\n"
+        f"🛍 Produk Aktif : {product_count}\n"
+        f"📦 Stok Akun : {stock} (Keseluruhan jumlah stok)\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"Where to start?\n"
-        f"🛒 Buy account → Product List\n"
-        f"📋 Check transactions → Order History"
+        f"💡 Mulai dari mana?\n"
+        f"• Beli akun → Daftar Produk\n"
+        f"• Cek transaksi → Riwayat Order\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
 

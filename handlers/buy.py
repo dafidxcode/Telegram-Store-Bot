@@ -8,6 +8,8 @@ import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 
+import qrcode
+from qrcode.image.pil import PilImage
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -76,6 +78,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
         return None, None
 
     qris_image_url = None
+    qris_content = None
     if klikqris.is_active():
         try:
             result = await klikqris.get().create_qris(
@@ -84,10 +87,26 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
                 keterangan=f"{product['name']} x{quantity}",
             )
             qris_data = result.get("data") or {}
-            qris_image_url = qris_data.get("qris_image") or qris_data.get("image_url") or qris_data.get("url")
+            logger.info("KlikQRIS response keys: %s", list(qris_data.keys()))
+            logger.debug("KlikQRIS full response: %s", result)
+
+            qris_image_url = (
+                qris_data.get("qris_image")
+                or qris_data.get("image_url")
+                or qris_data.get("url")
+                or qris_data.get("qr_image")
+                or qris_data.get("payment_url")
+            )
+            qris_content = (
+                qris_data.get("qris_content")
+                or qris_data.get("qris_data")
+                or qris_data.get("qris_payload")
+                or qris_data.get("qrContent")
+            )
+
             db.set_order_qris_ref(order_id, order_id)
-            logger.info("QRIS created for %s — image: %s", order_id, bool(qris_image_url))
-            logger.debug("QRIS response data keys: %s", list(qris_data.keys()))
+            logger.info("QRIS created for %s — image_url: %s, qris_content: %s",
+                        order_id, bool(qris_image_url), bool(qris_content))
         except klikqris.KlikQRISError as e:
             logger.warning("KlikQRIS failed for %s: %s", order_id, e)
         except Exception as e:
@@ -121,27 +140,57 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     )
 
     sent_msg = None
+
+    # --- Try to send QRIS image ---
+    # 1) If we have a URL, try send_photo with URL
     if qris_image_url:
         try:
-            if qris_image_url.startswith("data:"):
-                header, b64data = qris_image_url.split(",", 1)
-                img_bytes = base64.b64decode(b64data)
-                photo_file = io.BytesIO(img_bytes)
-                photo_file.name = f"qris_{order_id}.png"
-                sent_msg = await context.bot.send_photo(
-                    chat_id=user.id,
-                    photo=photo_file,
-                    caption=caption,
-                )
-            else:
-                sent_msg = await context.bot.send_photo(
-                    chat_id=user.id,
-                    photo=qris_image_url,
-                    caption=caption,
-                )
-            logger.info("QRIS image sent for %s", order_id)
+            sent_msg = await context.bot.send_photo(
+                chat_id=user.id,
+                photo=qris_image_url,
+                caption=caption,
+            )
+            logger.info("QRIS image URL sent for %s", order_id)
         except Exception as e:
-            logger.warning("Failed to send QRIS image %s: %s. Falling back to text.", order_id, e)
+            logger.warning("Failed to send QRIS URL for %s: %s", order_id, e)
+            sent_msg = None
+
+    # 2) If we have qris_content (raw QRIS string), render to QR code image
+    if sent_msg is None and qris_content:
+        try:
+            qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
+            qr.add_data(qris_content)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            buf.seek(0)
+            buf.name = f"qris_{order_id}.png"
+            sent_msg = await context.bot.send_photo(
+                chat_id=user.id,
+                photo=buf,
+                caption=caption,
+            )
+            logger.info("QRIS rendered from qris_content for %s", order_id)
+        except Exception as e:
+            logger.warning("Failed to render QRIS content for %s: %s", order_id, e)
+            sent_msg = None
+
+    # 3) If qris_image_url starts with data: (base64 inline)
+    if sent_msg is None and qris_image_url and qris_image_url.startswith("data:"):
+        try:
+            header, b64data = qris_image_url.split(",", 1)
+            img_bytes = base64.b64decode(b64data)
+            photo_file = io.BytesIO(img_bytes)
+            photo_file.name = f"qris_{order_id}.png"
+            sent_msg = await context.bot.send_photo(
+                chat_id=user.id,
+                photo=photo_file,
+                caption=caption,
+            )
+            logger.info("QRIS base64 image sent for %s", order_id)
+        except Exception as e:
+            logger.warning("Failed to send QRIS base64 for %s: %s", order_id, e)
             sent_msg = None
 
     if sent_msg is None:
