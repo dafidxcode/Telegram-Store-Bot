@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SWD x Videogen - Admin Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f23; color: #e0e0e0; min-height: 100vh; }
+
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00d4ff; }
+        .header h1 { color: #00d4ff; font-size: 22px; }
+        .header .badge { background: #00d4ff; color: #0f0f23; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #1a1a2e; border-radius: 12px; padding: 20px; border: 1px solid #2a2a4a; }
+        .stat-card .label { color: #888; font-size: 13px; margin-bottom: 8px; }
+        .stat-card .value { font-size: 28px; font-weight: bold; color: #00d4ff; }
+        .stat-card .value.green { color: #00ff88; }
+        .stat-card .value.yellow { color: #ffd700; }
+        .stat-card .value.red { color: #ff4444; }
+        .stat-card .value.purple { color: #bb86fc; }
+
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { background: #1a1a2e; border: 1px solid #2a2a4a; color: #888; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .tab:hover { border-color: #00d4ff; color: #00d4ff; }
+        .tab.active { background: #00d4ff; color: #0f0f23; border-color: #00d4ff; }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        .card { background: #1a1a2e; border-radius: 12px; padding: 24px; border: 1px solid #2a2a4a; margin-bottom: 16px; }
+        .card h2 { color: #00d4ff; margin-bottom: 16px; font-size: 18px; }
+
+        textarea, input[type="text"], input[type="number"] {
+            width: 100%; padding: 12px; background: #0f0f23; border: 1px solid #2a2a4a;
+            border-radius: 8px; color: #e0e0e0; font-size: 14px; resize: vertical;
+        }
+        textarea:focus, input:focus { outline: none; border-color: #00d4ff; }
+
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: all 0.2s; }
+        .btn-primary { background: #00d4ff; color: #0f0f23; }
+        .btn-primary:hover { background: #00b8d9; }
+        .btn-danger { background: #ff4444; color: white; }
+        .btn-danger:hover { background: #cc0000; }
+        .btn-success { background: #00ff88; color: #0f0f23; }
+        .btn-success:hover { background: #00cc6a; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        .btn-group { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #2a2a4a; }
+        th { color: #00d4ff; font-size: 12px; text-transform: uppercase; }
+        td { font-size: 13px; }
+        tr:hover { background: #16213e; }
+
+        .status { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+        .status-pending { background: #332200; color: #ffd700; }
+        .status-paid { background: #003322; color: #00ff88; }
+        .status-delivered { background: #001133; color: #00d4ff; }
+        .status-cancelled { background: #330000; color: #ff4444; }
+
+        .admin-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .admin-tag { background: #16213e; border: 1px solid #2a2a4a; padding: 6px 14px; border-radius: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .admin-tag .remove { color: #ff4444; cursor: pointer; font-weight: bold; }
+        .admin-tag .remove:hover { color: #ff0000; }
+
+        .toast { position: fixed; top: 20px; right: 20px; background: #00ff88; color: #0f0f23; padding: 12px 20px; border-radius: 8px; font-weight: bold; display: none; z-index: 999; }
+        .toast.error { background: #ff4444; color: white; }
+
+        @media (max-width: 768px) {
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .stat-card .value { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SWD x Videogen Dashboard</h1>
+        <span class="badge">ADMIN</span>
+    </div>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card"><div class="label">Total Stok</div><div class="value" id="stat-stock">-</div></div>
+            <div class="stat-card"><div class="label">Total Users</div><div class="value purple" id="stat-users">-</div></div>
+            <div class="stat-card"><div class="label">Order Pending</div><div class="value yellow" id="stat-pending">-</div></div>
+            <div class="stat-card"><div class="label">Order Paid</div><div class="value green" id="stat-paid">-</div></div>
+            <div class="stat-card"><div class="label">Revenue</div><div class="value green" id="stat-revenue">-</div></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showPanel('orders')">Orders</div>
+            <div class="tab" onclick="showPanel('stock')">Kelola Stok</div>
+            <div class="tab" onclick="showPanel('price')">Harga</div>
+            <div class="tab" onclick="showPanel('admins')">Admins</div>
+        </div>
+
+        <!-- Orders Panel -->
+        <div class="panel active" id="panel-orders">
+            <div class="card">
+                <h2>Daftar Order</h2>
+                <table>
+                    <thead>
+                        <tr><th>Order ID</th><th>User</th><th>Jumlah</th><th>Total</th><th>Status</th><th>Aksi</th></tr>
+                    </thead>
+                    <tbody id="orders-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Stock Panel -->
+        <div class="panel" id="panel-stock">
+            <div class="card">
+                <h2>Tambah Stok (Upload .txt)</h2>
+                <p style="color:#888;margin-bottom:12px;">Format per baris: email:password:balance</p>
+                <textarea id="stock-text" rows="10" placeholder="email1@domain.com:password1:8500&#10;email2@domain.com:password2:8500"></textarea>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="addStock()">Tambah Stok</button>
+                </div>
+                <p id="stock-result" style="margin-top:12px;color:#00ff88;display:none;"></p>
+            </div>
+        </div>
+
+        <!-- Price Panel -->
+        <div class="panel" id="panel-price">
+            <div class="card">
+                <h2>Ubah Harga per Akun</h2>
+                <input type="number" id="price-input" placeholder="Masukkan harga baru (Rp)">
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="setPrice()">Simpan Harga</button>
+                </div>
+                <p id="price-result" style="margin-top:12px;color:#00ff88;display:none;"></p>
+            </div>
+        </div>
+
+        <!-- Admins Panel -->
+        <div class="panel" id="panel-admins">
+            <div class="card">
+                <h2>Kelola Admin</h2>
+                <p style="color:#888;margin-bottom:12px;">Masukkan Telegram User ID untuk menambah admin baru</p>
+                <input type="number" id="admin-id-input" placeholder="Telegram User ID">
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="addAdmin()">Tambah Admin</button>
+                </div>
+                <div class="admin-list" id="admin-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        function showToast(msg, isError) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast' + (isError ? ' error' : '');
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        function showPanel(name) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.add('active');
+            event.target.classList.add('active');
+
+            if (name === 'orders') loadOrders();
+            if (name === 'admins') loadAdmins();
+        }
+
+        async function loadDashboard() {
+            const r = await fetch('/api/dashboard');
+            const d = await r.json();
+            document.getElementById('stat-stock').textContent = d.stock;
+            document.getElementById('stat-users').textContent = d.total_users;
+            document.getElementById('stat-pending').textContent = d.pending;
+            document.getElementById('stat-paid').textContent = d.paid + d.delivered;
+            document.getElementById('stat-revenue').textContent = 'Rp ' + d.total_revenue.toLocaleString('id-ID');
+            document.getElementById('price-input').value = d.harga_per_akun;
+        }
+
+        async function loadOrders() {
+            const r = await fetch('/api/orders');
+            const d = await r.json();
+            const tbody = document.getElementById('orders-table');
+            tbody.innerHTML = '';
+            d.orders.forEach(o => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${o.id}</td>
+                    <td>@${o.username || 'N/A'}</td>
+                    <td>${o.quantity}</td>
+                    <td>Rp ${o.total.toLocaleString('id-ID')}</td>
+                    <td><span class="status status-${o.status}">${o.status}</span></td>
+                    <td>
+                        ${o.status === 'pending' ? '<button class="btn btn-success btn-sm" onclick="setOrderStatus(\''+o.id+'\',\'paid\')">Paid</button>' : ''}
+                        ${o.status !== 'cancelled' ? '<button class="btn btn-danger btn-sm" onclick="setOrderStatus(\''+o.id+'\',\'cancelled\')">Cancel</button>' : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function addStock() {
+            const text = document.getElementById('stock-text').value;
+            const r = await fetch('/api/stock/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text}) });
+            const d = await r.json();
+            const p = document.getElementById('stock-result');
+            p.textContent = `Berhasil tambah ${d.added} akun. Total stok: ${d.total}`;
+            p.style.display = 'block';
+            document.getElementById('stock-text').value = '';
+            loadDashboard();
+            showToast(`${d.added} akun ditambahkan!`);
+        }
+
+        async function setPrice() {
+            const price = parseInt(document.getElementById('price-input').value);
+            const r = await fetch('/api/price', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({price}) });
+            const d = await r.json();
+            const p = document.getElementById('price-result');
+            p.textContent = `Harga diubah ke Rp ${d.price.toLocaleString('id-ID')}`;
+            p.style.display = 'block';
+            loadDashboard();
+            showToast('Harga diupdate!');
+        }
+
+        async function addAdmin() {
+            const id = document.getElementById('admin-id-input').value;
+            const r = await fetch('/api/admins/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({telegram_id: parseInt(id)}) });
+            const d = await r.json();
+            if (d.success) {
+                loadAdmins();
+                loadDashboard();
+                showToast('Admin ditambahkan!');
+                document.getElementById('admin-id-input').value = '';
+            }
+        }
+
+        async function removeAdmin(id) {
+            const r = await fetch('/api/admins/remove', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({telegram_id: id}) });
+            const d = await r.json();
+            if (d.success) {
+                loadAdmins();
+                loadDashboard();
+                showToast('Admin dihapus');
+            }
+        }
+
+        async function loadAdmins() {
+            const r = await fetch('/api/dashboard');
+            const d = await r.json();
+            const list = document.getElementById('admin-list');
+            list.innerHTML = '';
+            d.admins.forEach(id => {
+                const tag = document.createElement('div');
+                tag.className = 'admin-tag';
+                tag.innerHTML = `ID: ${id} ${id !== d.admins[0] ? '<span class="remove" onclick="removeAdmin('+id+')">x</span>' : '<span style="color:#00ff88;font-size:11px;">(utama)</span>'}`;
+                list.appendChild(tag);
+            });
+        }
+
+        async function setOrderStatus(id, status) {
+            await fetch('/api/orders/' + id + '/status', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status}) });
+            loadOrders();
+            loadDashboard();
+            showToast(`Order ${id} -> ${status}`);
+        }
+
+        loadDashboard();
+        loadOrders();
+    </script>
+</body>
+</html>
