@@ -30,7 +30,7 @@ ADMIN_USER_ID: int = _require_int_env("ADMIN_USER_ID")
 HARGA_PER_AKUN: int = _require_int_env("HARGA_PER_AKUN")
 
 SHOP_NAME: str = os.getenv("SHOP_NAME", "SWD x Videogen")
-DB_PATH: str = os.getenv("DB_PATH", "data/bot.db")
+DB_PATH: str = os.getenv("DB_PATH", "/app/data/bot.db")
 
 KLIKQRIS_API_KEY: str = os.getenv("KLIKQRIS_API_KEY", "").strip()
 KLIKQRIS_MERCHANT_ID: str = os.getenv("KLIKQRIS_MERCHANT_ID", "").strip()
