@@ -93,14 +93,31 @@ class KlikQRIS:
         """Cek status QRIS.
 
         Returns dict with data.payment_status in: PENDING, SUCCESS, EXPIRED.
+        Normalizes the response so payment_status is always available.
         """
         try:
             r = await self.client.get(f"{self.base_url}/qris/status/{order_id}")
             r.raise_for_status()
-            data = r.json()
-            if data.get("status") is not True:
+            raw = r.json()
+            if raw.get("status") is not True:
                 return {"status": False, "data": {"payment_status": "PENDING"}}
-            return data
+
+            data = raw.get("data") or {}
+            payment_status = (
+                data.get("payment_status")
+                or data.get("status")
+                or "PENDING"
+            )
+            # Normalize: if status is boolean True, it means paid
+            if payment_status is True:
+                payment_status = "SUCCESS"
+            elif payment_status is False:
+                payment_status = "PENDING"
+
+            data["payment_status"] = str(payment_status).strip().upper()
+            raw["data"] = data
+            logger.info("check_status %s: payment_status=%s keys=%s", order_id, data["payment_status"], list(data.keys()))
+            return raw
         except httpx.HTTPStatusError as e:
             raise KlikQRISError(f"HTTP {e.response.status_code}") from e
         except httpx.RequestError as e:

@@ -244,6 +244,56 @@ async def klikqris_webhook(request: Request):
         elif status in ("PAID", "SUCCESS"):
             db.update_order_status(order_id, "paid")
             logger.info("Order %s marked PAID via webhook", order_id)
+
+            # Try to deliver accounts
+            try:
+                import io
+                from telegram import Bot
+                order = db.get_order(order_id)
+                if order:
+                    quantity = order["quantity"]
+                    product_id = order.get("product_id", 1)
+                    user_id = order["user_id"]
+                    stock_items = db.take_stock(order_id, quantity, product_id=product_id)
+                    if stock_items:
+                        txt_content = ""
+                        for item in stock_items:
+                            bal = item.get("balance", "")
+                            if bal:
+                                txt_content += f"{item['email']}:{item['password']}:{bal}\n"
+                            else:
+                                txt_content += f"{item['email']}:{item['password']}\n"
+                        txt_bytes = txt_content.encode("utf-8")
+                        txt_file = io.BytesIO(txt_bytes)
+                        txt_file.name = f"accounts_{order_id}.txt"
+                        bot = Bot(token=config.BOT_TOKEN)
+                        await bot.send_document(
+                            chat_id=user_id,
+                            document=txt_file,
+                            caption=(
+                                f"✅ PAYMENT SUCCESSFUL!\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"🆔 Order: #{order_id}\n"
+                                f"🔢 Quantity: {quantity} accounts\n"
+                                f"💰 Total: Rp {order.get('total', 0):,}\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                                f"📁 Your account file is attached.\n"
+                                f"Keep it safe! 🔐"
+                            ),
+                        )
+                        logger.info("Webhook delivered %d accounts for %s", len(stock_items), order_id)
+                    else:
+                        logger.warning("Webhook order %s paid but stock insufficient!", order_id)
+                        from telegram import Bot
+                        bot = Bot(token=config.BOT_TOKEN)
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text=f"Payment successful for Order *#{order_id}*!\n\nHowever, stock is insufficient. Admin will process manually.",
+                            parse_mode="Markdown",
+                        )
+            except Exception as e:
+                logger.exception("Webhook delivery failed for %s: %s", order_id, e)
+
         elif status in ("EXPIRED", "FAILED", "CANCELLED"):
             db.update_order_status(order_id, "cancelled")
             released = db.release_stock(order_id)

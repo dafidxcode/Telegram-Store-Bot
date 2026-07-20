@@ -101,8 +101,15 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
         product_id = order.get("product_id", 1)
         try:
             res = await klik.check_status(order_id)
-            raw_status = (res.get("data") or {}).get("payment_status", "PENDING")
+            data = res.get("data") or {}
+            raw_status = (
+                data.get("payment_status")
+                or data.get("status")
+                or data.get("payment_status_raw")
+                or "PENDING"
+            )
             payment_status = str(raw_status).strip().upper()
+            logger.info("Poller check %s: raw=%s parsed=%s keys=%s", order_id, raw_status, payment_status, list(data.keys()))
         except klikqris.KlikQRISError as e:
             logger.warning("Check status %s failed: %s", order_id, e)
             continue

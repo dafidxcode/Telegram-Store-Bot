@@ -1,7 +1,10 @@
 """Main entry point for SWD x Videogen Bot."""
 
 import logging
+import os
+import threading
 
+import uvicorn
 from telegram import Update
 from telegram.ext import ApplicationBuilder
 
@@ -21,6 +24,14 @@ logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+def _start_webhook_server():
+    """Run the FastAPI webhook server in a background thread."""
+    from webhook import app
+    port = int(os.getenv("PORT", "8080"))
+    logger.info("Starting webhook server on port %d", port)
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+
 def main():
     db.init_db(config.DB_PATH)
     logger.info("Database siap: %s", config.DB_PATH)
@@ -37,6 +48,10 @@ def main():
         logger.info("KlikQRIS: aktif (mode production, PG KlikQRIS)")
     else:
         logger.warning("KlikQRIS: non-aktif.")
+
+    # Start webhook server in background thread
+    webhook_thread = threading.Thread(target=_start_webhook_server, daemon=True)
+    webhook_thread.start()
 
     app = (
         ApplicationBuilder()
@@ -60,7 +75,7 @@ def main():
         )
         logger.info("QRIS poller aktif (interval %ds)", poller.POLL_INTERVAL)
 
-    logger.info("Starting bot...")
+    logger.info("Starting bot + webhook server...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
