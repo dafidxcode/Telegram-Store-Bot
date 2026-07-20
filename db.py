@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS users (
   last_seen TEXT DEFAULT (datetime('now'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_email ON stock(email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_email_product ON stock(email, product_id);
 """
 
 
@@ -103,6 +103,26 @@ def _migrate(conn: sqlite3.Connection) -> None:
           created_at TEXT DEFAULT (datetime('now'))
         )
     """)
+
+    # --- migration: rebuild unique index from global to per-product ---
+    try:
+        old_idx = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_stock_email'"
+        ).fetchone()
+        if old_idx:
+            conn.execute("DROP INDEX IF EXISTS idx_stock_email")
+            logger_d = __import__("logging").getLogger(__name__)
+            logger_d.info("Dropped old global unique index idx_stock_email")
+    except Exception:
+        pass
+
+    try:
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_email_product ON stock(email, product_id)"
+        )
+    except Exception:
+        pass
+
     conn.commit()
 
 
@@ -333,6 +353,13 @@ def update_order_status(order_id: str, status: str) -> bool:
     return cur.rowcount > 0
 
 
+def delete_order(order_id: str) -> bool:
+    assert _conn is not None
+    cur = _conn.execute("DELETE FROM orders WHERE id = ?", (order_id,))
+    _conn.commit()
+    return cur.rowcount > 0
+
+
 def set_order_qris_ref(order_id: str, qris_ref: str) -> bool:
     assert _conn is not None
     cur = _conn.execute(
@@ -357,6 +384,15 @@ def get_pending_qris_orders() -> list[dict]:
     assert _conn is not None
     rows = _conn.execute(
         "SELECT * FROM orders WHERE status = 'pending' AND qris_ref IS NOT NULL ORDER BY created_at ASC LIMIT 50"
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_expired_pending_orders() -> list[dict]:
+    """Get pending orders whose expires_at has passed."""
+    assert _conn is not None
+    rows = _conn.execute(
+        "SELECT * FROM orders WHERE status = 'pending' AND expires_at != '' AND expires_at < datetime('now') ORDER BY created_at ASC LIMIT 50"
     ).fetchall()
     return [_row_to_dict(r) for r in rows]
 

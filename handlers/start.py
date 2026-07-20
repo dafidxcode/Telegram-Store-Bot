@@ -34,8 +34,43 @@ def get_greeting() -> str:
         return "Good Night"
 
 
+# ---------------------------------------------------------------------------
+# Global navigation buttons — used across ALL chatbox screens
+# ---------------------------------------------------------------------------
+
+def btn_home():
+    return InlineKeyboardButton("🏠 Home", callback_data="menu:start")
+
+
+def btn_back(text="⬅️ Back", data="menu:start"):
+    return InlineKeyboardButton(text, callback_data=data)
+
+
+def btn_cancel_payment():
+    return InlineKeyboardButton("❌ Cancel Payment", callback_data="global:cancel_payment")
+
+
+def global_nav_row():
+    return [btn_home()]
+
+
+def global_nav_keyboard(user_id: int = 0):
+    """Three-button row: Back | Cancel | Home — for payment screens."""
+    return InlineKeyboardMarkup([
+        [btn_back(), btn_cancel_payment(), btn_home()],
+    ])
+
+
+def global_nav_keyboard_simple(user_id: int = 0):
+    """Single Home button — for general screens."""
+    return InlineKeyboardMarkup([global_nav_row()])
+
+
+# ---------------------------------------------------------------------------
+# Text builders
+# ---------------------------------------------------------------------------
+
 def build_home_text(user) -> str:
-    stock = db.get_stock_count()
     sold = db.get_total_sold()
     total_users = db.get_total_users()
     user_orders = db.get_user_order_count(user.id)
@@ -43,6 +78,13 @@ def build_home_text(user) -> str:
     first_name = user.first_name or "friend"
     active_products = db.get_active_products()
     product_count = len(active_products)
+
+    product_lines = []
+    for p in active_products:
+        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+        product_lines.append(f"  • {p['name']}: {stock} stock | Rp {format_rupiah(p['price'])}")
+
+    product_stock_text = "\n".join(product_lines) if product_lines else "  No products yet"
 
     return (
         f"{get_greeting()}, {first_name}!\n"
@@ -60,7 +102,11 @@ def build_home_text(user) -> str:
         f"*📊 BOT STATS*\n"
         f"📨 Accounts Sold : {sold}\n"
         f"🛍 Active Products : {product_count}\n"
-        f"📦 Stock : {stock} (Total across all products)\n"
+        f"👥 Total Users : {total_users}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
+        f"*📦 STOCK PER PRODUCT*\n"
+        f"{product_stock_text}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
         f"💡 Where to start?\n"
@@ -82,7 +128,7 @@ def build_products_text() -> str:
         desc = f"\n{p['description']}" if p.get("description") else ""
 
         lines.append(
-            f"*{i}. {p['name']}* {'🔥' if i == 1 else ''}\n"
+            f"*{i}. {p['name']}*\n"
             f"{desc}{duration}\n"
             f"💰 Price: *Rp {format_rupiah(p['price'])}*\n"
             f"📦 Stock: *{stock}* {'accounts' if p['stock_type'] == 'limited' else ''}\n"
@@ -150,6 +196,7 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("stock", cmd_stock))
     app.add_handler(CommandHandler("produk", cmd_produk))
+    app.add_handler(CallbackQueryHandler(handle_global_cancel, pattern=r"^global:cancel_payment$"))
     app.add_handler(CallbackQueryHandler(handle_menu_button, pattern=r"^menu:"))
     app.add_handler(CallbackQueryHandler(handle_admin_button, pattern=r"^admin:"))
 
@@ -170,7 +217,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
     message = update.message
     if message is None:
         return
@@ -183,7 +229,7 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             f"🛒 {p['name']} - Rp {format_rupiah(p['price'])}",
             callback_data=f"buy:{p['id']}",
         )])
-    buttons.append([InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")])
+    buttons.append([btn_home()])
 
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -193,9 +239,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
-    ])
+    keyboard = InlineKeyboardMarkup([global_nav_row()])
 
     text = (
         "*❓ Help*\n\n"
@@ -222,19 +266,62 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    stock = db.get_stock_count()
+    products = db.get_active_products()
+    total_stock = db.get_stock_count()
+
+    text = f"*📦 Stock Info*\n\n"
+    if products:
+        for p in products:
+            stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+            text += f"• *{p['name']}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
+        text += f"\n📦 Total: *{total_stock}* accounts"
+    else:
+        text += "No products available yet."
+
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+        [btn_home()],
     ])
 
-    await message.reply_text(
-        f"*📦 Stock Info*\n\n"
-        f"📦 Available stock: *{stock}* accounts\n"
-        f"💰 Price: *Rp {config.HARGA_PER_AKUN:,}/account*\n"
-        f"💵 Total value: *Rp {format_rupiah(config.HARGA_PER_AKUN * stock)}*",
+    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+
+
+# ---------------------------------------------------------------------------
+# Global cancel payment handler
+# ---------------------------------------------------------------------------
+
+async def handle_global_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle Cancel Payment button — cancel the most recent pending order."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    orders = db.get_user_orders(user_id)
+    pending = [o for o in orders if o.get("status") == "pending"]
+
+    if not pending:
+        await query.answer("No pending payment to cancel.", show_alert=True)
+        return
+
+    order = pending[0]
+    order_id = order["id"]
+
+    db.update_order_status(order_id, "cancelled")
+    db.release_stock(order_id)
+
+    qris_msg_id = order.get("qris_message_id")
+    if qris_msg_id:
+        try:
+            await context.bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+        except Exception:
+            pass
+
+    await query.edit_message_text(
+        f"❌ Payment for order *#{order_id}* has been cancelled.\n\nCreate a new order below 👇",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=keyboard,
+        reply_markup=get_main_menu_keyboard(user_id),
     )
 
 
@@ -265,27 +352,30 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"🛒 {p['name']} - Rp {format_rupiah(p['price'])}",
                 callback_data=f"buy:{p['id']}",
             )])
-        buttons.append([InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")])
+        buttons.append([btn_home()])
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif action == "stok":
-        stock = db.get_stock_count()
+        products = db.get_active_products()
+        total_stock = db.get_stock_count()
+
+        text = f"*📦 Stock Info*\n\n"
+        if products:
+            for p in products:
+                stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+                text += f"• *{p['name']}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
+            text += f"\n📦 Total: *{total_stock}* accounts"
+        else:
+            text += "No products available yet."
+
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-            [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+            [btn_home()],
         ])
-        text = (
-            f"*📦 Stock Info*\n\n"
-            f"📦 Available stock: *{stock}* accounts\n"
-            f"💰 Price: *Rp {config.HARGA_PER_AKUN:,}/account*\n"
-            f"💵 Total value: *Rp {format_rupiah(config.HARGA_PER_AKUN * stock)}*"
-        )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
     elif action == "orders":
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
-        ])
+        keyboard = InlineKeyboardMarkup([global_nav_row()])
         try:
             user_id = update.effective_user.id
             orders = db.get_user_orders(user_id)
@@ -295,7 +385,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     "No orders yet. Buy now! 🛒",
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-                        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+                        [btn_home()],
                     ]),
                 )
                 return
@@ -309,7 +399,9 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 total = o.get("total", 0)
                 status = o.get("status", "pending")
                 emoji = _STATUS_EMOJI.get(status, "⏳")
-                lines.append(f"#{order_id} | {qty} accounts | Rp {format_rupiah(total)} | {emoji} {status}")
+                product = db.get_product(o.get("product_id", 1))
+                product_name = product["name"] if product else "N/A"
+                lines.append(f"#{order_id} | {product_name} x{qty} | Rp {format_rupiah(total)} | {emoji} {status}")
 
             await query.edit_message_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
@@ -322,31 +414,38 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.answer("Access denied.", show_alert=True)
             return
 
-        stock = db.get_stock_count()
+        total_stock = db.get_stock_count()
         sold = db.get_total_sold()
         total_users = db.get_total_users()
         products = db.get_active_products()
         pending = len(db.get_pending_qris_orders())
 
+        product_lines = []
+        for p in products:
+            p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+            product_lines.append(f"  #{p['id']} {p['name']}: {p_stock} stock | Rp {format_rupiah(p['price'])}")
+
+        product_stock_text = "\n".join(product_lines) if product_lines else "  No products"
+
         text = (
             f"*⚙️ ADMIN PANEL*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"*📊 Dashboard*\n"
-            f"📦 Stock Ready : *{stock}* accounts\n"
+            f"📦 Stock Ready : *{total_stock}* accounts\n"
             f"✅ Sold : *{sold}* accounts\n"
             f"⏳ Pending Orders : *{pending}*\n"
             f"👥 Total Users : *{total_users}*\n"
             f"🛍️ Total Products : *{len(products)}*\n"
-            f"💰 Price : *Rp {format_rupiah(config.HARGA_PER_AKUN)}/account*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"*📦 PER-PRODUCT STOCK*\n"
+            f"{product_stock_text}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"Select admin menu below 👇"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_panel_keyboard())
 
     elif action == "help":
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
-        ])
+        keyboard = InlineKeyboardMarkup([global_nav_row()])
         text = (
             "*❓ Help*\n\n"
             "*How to Buy:*\n"
@@ -410,14 +509,14 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
     elif action == "stockinfo":
-        stock = db.get_stock_count()
+        total_stock = db.get_stock_count()
         pending = len(db.get_pending_qris_orders())
         products = db.get_active_products()
 
         text = (
             f"*📊 STOCK INFO*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 Ready Stock: *{stock}* accounts\n"
+            f"📦 Total Ready Stock: *{total_stock}* accounts\n"
             f"⏳ Pending Orders: *{pending}*\n"
         )
         for p in products:
@@ -464,8 +563,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
         ]
         keyboard_rows = [filter_buttons]
-        back_row = [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")]
-        keyboard_rows.append(back_row)
+        keyboard_rows.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
 
         await query.edit_message_text(
             "\n".join(lines),
@@ -622,10 +720,12 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
 
         context.user_data["addstock_product_id"] = product_id
+        context.user_data["state"] = "addstock"
 
         text = (
             f"*📥 ADD STOCK — {product['name']}*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Current stock: *{db.get_stock_count(product_id)}* accounts\n\n"
             "*Method 1:* Send a .txt file\n"
             "Format per line: `email:password`\n\n"
             "*Method 2:* Paste directly in chat\n"
@@ -639,11 +739,10 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         text = (
             f"*💰 CHANGE PRICE*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"Current price: *Rp {format_rupiah(config.HARGA_PER_AKUN)}/account*\n\n"
             f"Type command:\n"
-            f"`/setprice NewPrice`\n\n"
+            f"`/setprice ProductID NewPrice`\n\n"
             f"*Example:*\n"
-            f"`/setprice 15000`"
+            f"`/setprice 1 15000`"
         )
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_admin_back_keyboard())
 

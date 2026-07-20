@@ -8,7 +8,7 @@
 - /stockinfo - View stock info
 - /orders - View recent orders + change status
 - /broadcast - Send message to all users
-- /setprice - Change price per account
+- /setprice - Change price per product
 - /addadmin - Add admin
 - /removeadmin - Remove admin
 - /adminlist - View admin list
@@ -29,6 +29,7 @@ from telegram.ext import (
 
 import config
 import db
+from handlers.start import btn_home
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def format_rupiah(n: int) -> str:
 def _admin_back_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
-        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+        [btn_home()],
     ])
 
 
@@ -129,7 +130,7 @@ def register(app: Application) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Product management
+# Stock / product text handler (must come BEFORE quick-add-product)
 # ---------------------------------------------------------------------------
 
 async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -139,23 +140,52 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         message = update.message
         if message is None or not message.text:
             return
+
         lines = message.text.strip().splitlines()
         count = db.add_stock_batch(lines, product_id=addstock_pid)
+
+        product = db.get_product(addstock_pid)
+        stock = db.get_stock_count(addstock_pid)
+        product_name = product["name"] if product else "Unknown"
+
+        context.user_data.pop("addstock_product_id", None)
+        context.user_data.pop("state", None)
+
         if count > 0:
-            product = db.get_product(addstock_pid)
-            stock = db.get_stock_count(addstock_pid)
-            context.user_data.pop("addstock_product_id", None)
             await message.reply_text(
-                f"*✅ Stock added to {product['name'] if product else 'product'}!*\n\n"
+                f"*✅ Stock added to {product_name}!*\n\n"
                 f"📥 Added: *{count}* accounts\n"
-                f"📦 Product stock: *{stock}* accounts",
+                f"📦 Product stock: *{stock}* accounts\n\n"
+                f"💡 Send more stock or click Back below.",
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=_admin_back_keyboard(),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"📥 Add More to {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
+                    [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
+                    [btn_home()],
+                ]),
+            )
+        else:
+            await message.reply_text(
+                f"*⚠️ No stock added to {product_name}*\n\n"
+                f"Please check format:\n"
+                f"`email:password`\n"
+                f"one account per line.\n\n"
+                f"Current product stock: *{stock}* accounts",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"🔄 Try Again — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
+                    [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
+                    [btn_home()],
+                ]),
             )
         return
 
     await handle_quick_addproduct(update, context)
 
+
+# ---------------------------------------------------------------------------
+# Product management
+# ---------------------------------------------------------------------------
 
 async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_admin(update):
@@ -368,17 +398,28 @@ async def cmd_addstock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if message is None:
         return
 
+    products = db.get_active_products()
+    if not products:
+        await message.reply_text(
+            "*📥 ADD STOCK*\n\nNo active products yet. Add a product first.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+        return
+
+    buttons = []
+    for p in products:
+        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+        buttons.append([InlineKeyboardButton(
+            f"📦 {p['name']} (Stock: {stock})",
+            callback_data=f"admin:astk:{p['id']}",
+        )])
+    buttons.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+
     await message.reply_text(
-        "*📥 ADD STOCK*\n\n"
-        "*Method 1:* Send a .txt file with format per line:\n"
-        "`email:password`\n\n"
-        "*Method 2:* Paste account list directly in chat (one account per line)\n"
-        "`email1:password1`\n"
-        "`email2:password2`\n\n"
-        "Or use the Admin Panel button to select a product first.\n\n"
-        "Send now! 📤",
+        "*📥 ADD STOCK*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nSelect product to add stock to:",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=InlineKeyboardMarkup(buttons),
     )
 
 
@@ -432,20 +473,32 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
-    count = db.add_stock_batch(lines, product_id=context.user_data.get("addstock_product_id", 1))
-    product_id = context.user_data.pop("addstock_product_id", None)
-    product = db.get_product(product_id) if product_id else None
-    stock = db.get_stock_count(product_id) if product_id else db.get_stock_count()
-    product_label = product["name"] if product else "all products"
+    addstock_pid = context.user_data.get("addstock_product_id")
+    count = db.add_stock_batch(lines, product_id=addstock_pid or 1)
+    product_id_used = addstock_pid
+    context.user_data.pop("addstock_product_id", None)
+    context.user_data.pop("state", None)
 
-    await message.reply_text(
-        f"*✅ Stock added successfully!*\n\n"
-        f"📦 Product: *{product_label}*\n"
-        f"📥 Added: *{count}* accounts\n"
-        f"📦 Stock: *{stock}* accounts",
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
-    )
+    product = db.get_product(product_id_used) if product_id_used else None
+    stock = db.get_stock_count(product_id_used) if product_id_used else db.get_stock_count()
+    product_label = product["name"] if product else "default product"
+
+    if count > 0:
+        await message.reply_text(
+            f"*✅ Stock added successfully!*\n\n"
+            f"📦 Product: *{product_label}*\n"
+            f"📥 Added: *{count}* accounts\n"
+            f"📦 Stock: *{stock}* accounts",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+    else:
+        await message.reply_text(
+            f"*⚠️ No stock added*\n\n"
+            f"Check format: `email:password` per line.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
 
 
 async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -453,14 +506,14 @@ async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _deny_non_admin(update)
         return
 
-    stock = db.get_stock_count()
+    total_stock = db.get_stock_count()
     pending = len(db.get_pending_qris_orders())
     products = db.get_active_products()
 
     text = (
         f"*📊 STOCK INFO*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 Ready Stock: *{stock}* accounts\n"
+        f"📦 Total Ready Stock: *{total_stock}* accounts\n"
         f"⏳ Pending Orders: *{pending}*\n"
     )
     for p in products:
@@ -541,37 +594,48 @@ async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     args = context.args or []
-    if not args:
+    if len(args) < 2:
         await update.message.reply_text(
-            f"*💰 CHANGE PRICE*\n\n"
-            f"Current price: *Rp {config.HARGA_PER_AKUN:,}/account*\n\n"
-            f"Use: `/setprice <new_price>`\n\n"
-            f"*Example:* `/setprice 15000`",
+            "*💰 CHANGE PRICE*\n\n"
+            "Use: `/setprice <product_id> <new_price>`\n\n"
+            "*Example:*\n"
+            "`/setprice 1 15000`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
         return
 
     try:
-        new_price = int(args[0].replace(".", "").replace(",", ""))
+        product_id = int(args[0])
     except ValueError:
+        await update.message.reply_text("Product ID must be a number.", reply_markup=_admin_back_keyboard())
+        return
+
+    product = db.get_product(product_id)
+    if not product:
         await update.message.reply_text(
-            "Price must be a number.",
+            f"Product ID `{product_id}` not found.",
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(),
         )
+        return
+
+    try:
+        new_price = int(args[1].replace(".", "").replace(",", ""))
+    except ValueError:
+        await update.message.reply_text("Price must be a number.", reply_markup=_admin_back_keyboard())
         return
 
     if new_price <= 0:
-        await update.message.reply_text(
-            "Price must be greater than 0.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text("Price must be greater than 0.", reply_markup=_admin_back_keyboard())
         return
 
-    config.HARGA_PER_AKUN = new_price
+    db.update_product(product_id, price=new_price)
+    updated = db.get_product(product_id)
     await update.message.reply_text(
         f"*✅ Price updated!*\n\n"
-        f"New price: *Rp {new_price:,}/account*",
+        f"📦 Product: *{updated['name']}*\n"
+        f"💰 New price: *Rp {new_price:,}/account*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -646,10 +710,7 @@ async def cmd_addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         new_admin_id = int(args[0])
     except ValueError:
-        await update.message.reply_text(
-            "ID must be a number.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text("ID must be a number.", reply_markup=_admin_back_keyboard())
         return
 
     if new_admin_id in config.ADMIN_IDS:
@@ -689,10 +750,7 @@ async def cmd_removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         remove_id = int(args[0])
     except ValueError:
-        await update.message.reply_text(
-            "ID must be a number.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text("ID must be a number.", reply_markup=_admin_back_keyboard())
         return
 
     if remove_id == config.ADMIN_USER_ID:

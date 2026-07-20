@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import base64
 import io
 import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 
 import qrcode
-from qrcode.image.pil import PilImage
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -25,6 +23,12 @@ from telegram.ext import (
 import config
 import db
 from payments import klikqris
+from handlers.start import (
+    btn_home,
+    btn_back,
+    btn_cancel_payment,
+    global_nav_keyboard,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +54,10 @@ def get_main_menu_keyboard(user_id: int = 0):
     return InlineKeyboardMarkup(rows)
 
 
-def _cancel_button():
-    return [InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")]
-
-
 async def _create_order_and_pay(context, user, product, quantity, query=None, message=None):
     """Shared logic: create order, call QRIS API, send QRIS image, or fallback text."""
     total = product["price"] * quantity
-    qris_nominal = total + 500
+    qris_nominal = total
     expires_at = (datetime.now(tz=timezone(timedelta(hours=7))) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
     order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2).upper()}"
 
@@ -79,6 +79,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
 
     qris_image_url = None
     qris_content = None
+    qris_image_b64 = None
     if klikqris.is_active():
         try:
             result = await klikqris.get().create_qris(
@@ -88,15 +89,14 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             )
             qris_data = result.get("data") or {}
             logger.info("KlikQRIS response keys: %s", list(qris_data.keys()))
-            logger.debug("KlikQRIS full response: %s", result)
 
-            qris_image_url = (
+            # Extract image — KlikQRIS PG returns qris_image as data:image/png;base64,...
+            raw_qris_image = (
                 qris_data.get("qris_image")
                 or qris_data.get("image_url")
-                or qris_data.get("url")
                 or qris_data.get("qr_image")
-                or qris_data.get("payment_url")
             )
+            qris_image_url = qris_data.get("qris_url")
             qris_content = (
                 qris_data.get("qris_content")
                 or qris_data.get("qris_data")
@@ -104,13 +104,17 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
                 or qris_data.get("qrContent")
             )
 
+            # Decode base64 inline image
+            if raw_qris_image:
+                qris_image_b64 = klikqris.KlikQRIS.decode_qris_image(raw_qris_image)
+
             db.set_order_qris_ref(order_id, order_id)
-            logger.info("QRIS created for %s — image_url: %s, qris_content: %s",
-                        order_id, bool(qris_image_url), bool(qris_content))
+            logger.info("QRIS created for %s — has_image_url=%s, has_b64=%s, has_content=%s",
+                        order_id, bool(qris_image_url), bool(qris_image_b64), bool(qris_content))
         except klikqris.KlikQRISError as e:
-            logger.warning("KlikQRIS failed for %s: %s", order_id, e)
+            logger.warning("KlikQRIS create failed for %s: %s", order_id, e)
         except Exception as e:
-            logger.exception("Unexpected error QRIS %s: %s", order_id, e)
+            logger.exception("Unexpected error creating QRIS %s: %s", order_id, e)
 
     if query:
         try:
@@ -129,8 +133,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
         f"🆔 ID: {order_id}\n"
         f"📦 Product: {product['name']}\n"
         f"🔢 Quantity: {quantity} accounts\n"
-        f"💰 Total: Rp {format_rupiah(total)}\n"
-        f"💳 QRIS Amount: Rp {format_rupiah(qris_nominal)}\n"
+        f"💰 Total: Rp {format_rupiah(qris_nominal)}\n"
         f"⏳ Status: awaiting payment\n"
         f"⏰ Expires: 30 minutes\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -141,9 +144,23 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
 
     sent_msg = None
 
-    # --- Try to send QRIS image ---
-    # 1) If we have a URL, try send_photo with URL
-    if qris_image_url:
+    # --- Strategy 1: decoded base64 PNG from qris_image field ---
+    if sent_msg is None and qris_image_b64:
+        try:
+            photo_file = io.BytesIO(qris_image_b64)
+            photo_file.name = f"qris_{order_id}.png"
+            sent_msg = await context.bot.send_photo(
+                chat_id=user.id,
+                photo=photo_file,
+                caption=caption,
+            )
+            logger.info("QRIS base64 image sent for %s", order_id)
+        except Exception as e:
+            logger.warning("Failed to send QRIS base64 for %s: %s", order_id, e)
+            sent_msg = None
+
+    # --- Strategy 2: URL from qris_url ---
+    if sent_msg is None and qris_image_url:
         try:
             sent_msg = await context.bot.send_photo(
                 chat_id=user.id,
@@ -155,7 +172,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             logger.warning("Failed to send QRIS URL for %s: %s", order_id, e)
             sent_msg = None
 
-    # 2) If we have qris_content (raw QRIS string), render to QR code image
+    # --- Strategy 3: render QR code from qris_content string ---
     if sent_msg is None and qris_content:
         try:
             qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
@@ -176,23 +193,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             logger.warning("Failed to render QRIS content for %s: %s", order_id, e)
             sent_msg = None
 
-    # 3) If qris_image_url starts with data: (base64 inline)
-    if sent_msg is None and qris_image_url and qris_image_url.startswith("data:"):
-        try:
-            header, b64data = qris_image_url.split(",", 1)
-            img_bytes = base64.b64decode(b64data)
-            photo_file = io.BytesIO(img_bytes)
-            photo_file.name = f"qris_{order_id}.png"
-            sent_msg = await context.bot.send_photo(
-                chat_id=user.id,
-                photo=photo_file,
-                caption=caption,
-            )
-            logger.info("QRIS base64 image sent for %s", order_id)
-        except Exception as e:
-            logger.warning("Failed to send QRIS base64 for %s: %s", order_id, e)
-            sent_msg = None
-
+    # --- Fallback: text only ---
     if sent_msg is None:
         text = (
             f"*✅ ORDER CREATED*\n"
@@ -200,12 +201,11 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             f"🆔 ID: `{order_id}`\n"
             f"📦 Product: *{product['name']}*\n"
             f"🔢 Quantity: *{quantity}* accounts\n"
-            f"💰 Total: *Rp {format_rupiah(total)}*\n"
-            f"💳 QRIS Amount: *Rp {format_rupiah(qris_nominal)}*\n"
+            f"💰 Total: *Rp {format_rupiah(qris_nominal)}*\n"
             f"⏳ Status: awaiting payment\n"
             f"⏰ Expires: 30 minutes\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "QRIS payment is being processed. 🔄\n"
+            "QRIS image is being generated. 🔄\n"
             "Check status at /myorders."
         )
         sent_msg = await context.bot.send_message(
@@ -277,7 +277,7 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             f"🛒 {p['name']} - Rp {format_rupiah(p['price'])} (📦 {stock})",
             callback_data=f"buy:{p['id']}",
         )])
-    buttons.append(_cancel_button())
+    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")])
 
     await message.reply_text(
         "*🛍️ Select Product*\n\nChoose a product to purchase:",
@@ -310,6 +310,7 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
             f"Sorry, *{product['name']}* is out of stock.\n\n"
             "Please choose another product or wait for restock.",
             parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_main_menu_keyboard(update.effective_user.id if update.effective_user else 0),
         )
         return ConversationHandler.END
 
@@ -357,7 +358,7 @@ async def _show_product_detail(query, product, qty, stock):
         ],
         [InlineKeyboardButton("⌨️ Enter Quantity Manually", callback_data="cart:input")],
         [InlineKeyboardButton(f"💳 Pay via QRIS - Rp {format_rupiah(total)}", callback_data="cart:custom")],
-        _cancel_button(),
+        [InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")],
     ])
 
     await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -480,7 +481,7 @@ async def _show_confirm(query, context, product, qty):
             InlineKeyboardButton("✅ Confirm & Pay", callback_data="confirm:yes"),
             InlineKeyboardButton("⬅️ Back", callback_data="confirm:no"),
         ],
-        _cancel_button(),
+        [InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")],
     ])
 
     await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -553,7 +554,7 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if not orders:
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-                [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+                [btn_home()],
             ])
             await update.message.reply_text("No orders yet. 🛒", reply_markup=keyboard)
             return
@@ -592,7 +593,7 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🔄 Buy Again", callback_data="menu:produk")],
-            [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+            [btn_home()],
         ])
 
         await update.message.reply_text(

@@ -16,6 +16,8 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -29,9 +31,10 @@ def main():
         klikqris.init(
             api_key=config.KLIKQRIS_API_KEY,
             merchant_id=config.KLIKQRIS_MERCHANT_ID,
-            mode=config.KLIKQRIS_MODE,
+            mode="production",
+            callback_url=config.KLIKQRIS_CALLBACK_URL,
         )
-        logger.info("KlikQRIS: aktif (mode %s)", config.KLIKQRIS_MODE)
+        logger.info("KlikQRIS: aktif (mode production, PG KlikQRIS)")
     else:
         logger.warning("KlikQRIS: non-aktif.")
 

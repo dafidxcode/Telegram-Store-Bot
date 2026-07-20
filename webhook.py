@@ -234,16 +234,20 @@ async def klikqris_webhook(request: Request):
     logger.info("KlikQRIS webhook: %s", json.dumps(body))
 
     order_id = body.get("order_id") or body.get("merchant_order_id")
-    status = body.get("status") or body.get("payment_status")
+    raw_status = body.get("status") or body.get("payment_status") or ""
+    status = str(raw_status).strip().upper()
 
     if order_id and status:
-        if status in ("paid", "success"):
+        existing = db.get_order(order_id)
+        if existing and existing.get("status") == "paid":
+            logger.info("Order %s already PAID, ignoring duplicate webhook", order_id)
+        elif status in ("PAID", "SUCCESS"):
             db.update_order_status(order_id, "paid")
             logger.info("Order %s marked PAID via webhook", order_id)
-        elif status in ("expired", "failed", "cancelled"):
+        elif status in ("EXPIRED", "FAILED", "CANCELLED"):
             db.update_order_status(order_id, "cancelled")
-            db.release_stock(order_id)
-            logger.info("Order %s cancelled via webhook", order_id)
+            released = db.release_stock(order_id)
+            logger.info("Order %s cancelled via webhook (%s), released %d stock", order_id, status, released)
 
     return {"status": "ok"}
 

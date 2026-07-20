@@ -34,9 +34,16 @@ DB_PATH: str = os.getenv("DB_PATH", "/app/data/bot.db")
 
 KLIKQRIS_API_KEY: str = os.getenv("KLIKQRIS_API_KEY", "").strip()
 KLIKQRIS_MERCHANT_ID: str = os.getenv("KLIKQRIS_MERCHANT_ID", "").strip()
-KLIKQRIS_MODE: str = os.getenv("KLIKQRIS_MODE", "sandbox").strip().lower()
+KLIKQRIS_MODE: str = os.getenv("KLIKQRIS_MODE", "production").strip().lower()
 
 KLIKQRIS_ACTIVE: bool = bool(KLIKQRIS_API_KEY) and bool(KLIKQRIS_MERCHANT_ID)
+
+# Callback URL for KlikQRIS (PG mode has no global webhook setting)
+KLIKQRIS_CALLBACK_URL: str = os.getenv("KLIKQRIS_CALLBACK_URL", "").strip()
+if KLIKQRIS_ACTIVE and not KLIKQRIS_CALLBACK_URL:
+    _webhook_url = os.getenv("WEBHOOK_URL", "").strip()
+    if _webhook_url:
+        KLIKQRIS_CALLBACK_URL = _webhook_url.rstrip("/") + "/webhook/klikqris"
 
 # Webhook config
 WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "").strip()
