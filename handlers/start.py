@@ -10,12 +10,14 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 
 import config
 import db
+import lang as L
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_LANG = "en"
+
 
 def escape_md(text: str) -> str:
-    """Escape characters that have special meaning in Telegram MarkdownV1."""
     for ch in ("_", "*", "`", "["):
         text = text.replace(ch, f"\\{ch}")
     return text
@@ -25,60 +27,69 @@ def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
 
+def get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return context.user_data.get("lang", DEFAULT_LANG)
+
+
+def t(key: str, lang: str, **fmt) -> str:
+    s = L.T.get(key, {}).get(lang) or L.T.get(key, {}).get(DEFAULT_LANG) or key
+    if fmt:
+        return s.format(**fmt)
+    return s
+
+
 def get_now_wib() -> str:
     wib = datetime.now(tz=timezone(timedelta(hours=7)))
     return wib.strftime(f"%-d %B %Y at %-H:%M WIB")
 
 
-def get_greeting() -> str:
+def get_greeting(lang: str = "en") -> str:
     hour = datetime.now(tz=timezone(timedelta(hours=7))).hour
     if 4 <= hour < 11:
-        return "Good Morning"
+        return t("good_morning", lang)
     elif 11 <= hour < 15:
-        return "Good Afternoon"
+        return t("good_afternoon", lang)
     elif 15 <= hour < 18:
-        return "Good Evening"
+        return t("good_evening", lang)
     else:
-        return "Good Night"
+        return t("good_night", lang)
 
 
 # ---------------------------------------------------------------------------
-# Global navigation buttons — used across ALL chatbox screens
+# Global navigation buttons
 # ---------------------------------------------------------------------------
 
-def btn_home():
-    return InlineKeyboardButton("🏠 Home", callback_data="menu:start")
+def btn_home(lang="en"):
+    return InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")
 
 
-def btn_back(text="⬅️ Back", data="menu:start"):
-    return InlineKeyboardButton(text, callback_data=data)
+def btn_back(lang="en", text=None, data="menu:start"):
+    return InlineKeyboardButton(text or t("btn_back", lang), callback_data=data)
 
 
-def btn_cancel_payment():
-    return InlineKeyboardButton("❌ Cancel Payment", callback_data="global:cancel_payment")
+def btn_cancel_payment(lang="en"):
+    return InlineKeyboardButton(t("btn_cancel_pay", lang), callback_data="global:cancel_payment")
 
 
-def global_nav_row():
-    return [btn_home()]
+def global_nav_row(lang="en"):
+    return [btn_home(lang)]
 
 
-def global_nav_keyboard(user_id: int = 0):
-    """Three-button row: Back | Cancel | Home — for payment screens."""
+def global_nav_keyboard(user_id: int = 0, lang="en"):
     return InlineKeyboardMarkup([
-        [btn_back(), btn_cancel_payment(), btn_home()],
+        [btn_back(lang), btn_cancel_payment(lang), btn_home(lang)],
     ])
 
 
-def global_nav_keyboard_simple(user_id: int = 0):
-    """Single Home button — for general screens."""
-    return InlineKeyboardMarkup([global_nav_row()])
+def global_nav_keyboard_simple(user_id: int = 0, lang="en"):
+    return InlineKeyboardMarkup([global_nav_row(lang)])
 
 
 # ---------------------------------------------------------------------------
 # Text builders
 # ---------------------------------------------------------------------------
 
-def build_home_text(user) -> str:
+def build_home_text(user, lang: str = "en") -> str:
     sold = db.get_total_sold()
     total_users = db.get_total_users()
     user_orders = db.get_user_order_count(user.id)
@@ -92,73 +103,77 @@ def build_home_text(user) -> str:
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
         product_lines.append(f"  • {escape_md(p['name'])}: {stock} stock | Rp {format_rupiah(p['price'])}")
 
-    product_stock_text = "\n".join(product_lines) if product_lines else "  No products yet"
+    product_stock_text = "\n".join(product_lines) if product_lines else f"  {t('no_products', lang)}"
 
     return (
-        f"{get_greeting()}, {first_name}!\n"
+        f"{get_greeting(lang)}, {first_name}!\n"
         f"📅 {get_now_wib()}\n"
         f"\n"
-        f"Welcome to *{escape_md(config.SHOP_NAME)}*.\n"
+        f"{t('welcome', lang, shop=escape_md(config.SHOP_NAME))}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"*👤 ACCOUNT STATS*\n"
-        f"Username : {username}\n"
+        f"*{t('account_stats', lang)}*\n"
+        f"{t('username', lang)} : {username}\n"
         f"ID : {user.id}\n"
-        f"📦 Total Orders : {user_orders} transactions\n"
+        f"{t('total_orders', lang, n=user_orders)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"*📊 BOT STATS*\n"
-        f"📨 Accounts Sold : {sold}\n"
-        f"🛍 Active Products : {product_count}\n"
-        f"👥 Total Users : {total_users}\n"
+        f"*{t('bot_stats', lang)}*\n"
+        f"{t('accounts_sold', lang, n=sold)}\n"
+        f"{t('active_products', lang, n=product_count)}\n"
+        f"{t('total_users', lang, n=total_users)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"*📦 STOCK PER PRODUCT*\n"
+        f"*{t('stock_per', lang)}*\n"
         f"{product_stock_text}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"💡 Where to start?\n"
-        f"• Buy account → Product List\n"
-        f"• Check transactions → Order History\n"
+        f"{t('where_start', lang)}\n"
+        f"{t('hint_buy', lang)}\n"
+        f"{t('hint_orders', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
 
-def build_products_text() -> str:
+def build_products_text(lang: str = "en") -> str:
     products = db.get_active_products()
     if not products:
-        return "*🛍️ PRODUCT LIST*\n\nNo products available yet."
+        return t("no_products_yet", lang)
 
-    lines = ["*🛍️ PRODUCT LIST*\n"]
+    lines = [f"{t('product_list_title', lang)}\n"]
     for i, p in enumerate(products, 1):
-        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
-        duration = f"\n⏰ Duration: {escape_md(p['duration'])}" if p.get("duration") else ""
+        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
+        duration = f"\n{t('duration', lang)}: {escape_md(p['duration'])}" if p.get("duration") else ""
         desc = f"\n{escape_md(p['description'])}" if p.get("description") else ""
 
+        acct_label = t("accounts", lang) if p['stock_type'] == 'limited' else ""
         lines.append(
             f"*{i}. {escape_md(p['name'])}*\n"
             f"{desc}{duration}\n"
-            f"💰 Price: *Rp {format_rupiah(p['price'])}*\n"
-            f"📦 Stock: *{stock}* {'accounts' if p['stock_type'] == 'limited' else ''}\n"
+            f"{t('price', lang)}: *Rp {format_rupiah(p['price'])}*\n"
+            f"{t('stock', lang)}: *{stock}* {acct_label}\n"
         )
 
-    lines.append("Select a product to order:")
+    lines.append(t("select_product", lang))
     return "\n".join(lines)
 
 
-def get_main_menu_keyboard(user_id: int = 0):
+def get_main_menu_keyboard(user_id: int = 0, lang: str = "en"):
+    other_lang = "ms" if lang == "en" else "en"
+    lang_label = "🌐 Bahasa Melayu" if lang == "en" else "🌐 English"
+
     rows = [
-        [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
+        [InlineKeyboardButton(t("btn_product_list", lang), callback_data="menu:produk")],
         [
-            InlineKeyboardButton("📦 Check Stock", callback_data="menu:stok"),
-            InlineKeyboardButton("📋 Order History", callback_data="menu:orders"),
+            InlineKeyboardButton(t("btn_check_stock", lang), callback_data="menu:stok"),
+            InlineKeyboardButton(t("btn_order_history", lang), callback_data="menu:orders"),
         ],
         [
-            InlineKeyboardButton("❓ Help", callback_data="menu:help"),
+            InlineKeyboardButton(lang_label, callback_data="menu:lang"),
         ],
     ]
     if user_id in config.ADMIN_IDS:
-        rows.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu:admin")])
+        rows.append([InlineKeyboardButton(t("btn_admin_panel", lang), callback_data="menu:admin")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -205,6 +220,7 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("stock", cmd_stock))
     app.add_handler(CommandHandler("produk", cmd_produk))
     app.add_handler(CallbackQueryHandler(handle_global_cancel, pattern=r"^global:cancel_payment$"))
+    app.add_handler(CallbackQueryHandler(handle_lang_toggle, pattern=r"^menu:lang$"))
     app.add_handler(CallbackQueryHandler(handle_menu_button, pattern=r"^menu:"))
     app.add_handler(CallbackQueryHandler(handle_admin_button, pattern=r"^admin:"))
 
@@ -220,8 +236,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as exc:
         logger.exception("Failed upsert user %s: %s", user.id, exc)
 
-    text = build_home_text(user)
-    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu_keyboard(user.id))
+    lang = get_lang(context)
+    text = build_home_text(user, lang)
+    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu_keyboard(user.id, lang))
 
 
 async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -229,7 +246,8 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if message is None:
         return
 
-    text = build_products_text()
+    lang = get_lang(context)
+    text = build_products_text(lang)
     products = db.get_active_products()
     buttons = []
     for p in products:
@@ -237,7 +255,7 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             f"🛒 {escape_md(p['name'])} - Rp {format_rupiah(p['price'])}",
             callback_data=f"buy:{p['id']}",
         )])
-    buttons.append([btn_home()])
+    buttons.append([btn_home(lang)])
 
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -247,23 +265,25 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    keyboard = InlineKeyboardMarkup([global_nav_row()])
+    lang = get_lang(context)
+    keyboard = InlineKeyboardMarkup([global_nav_row(lang)])
 
     text = (
-        "*❓ Help*\n\n"
-        "*How to Buy:*\n"
-        "1. Click *🛍️ Product List*\n"
-        "2. Select a product\n"
-        "3. Choose quantity\n"
-        "4. Confirm & pay via QRIS\n"
-        "5. Account is delivered automatically\n\n"
-        "*Commands:*\n"
-        "/start - 🏠 Main menu\n"
-        "/produk - 🛍️ View products\n"
-        "/beli - 🛒 Buy account\n"
-        "/stock - 📦 Check stock\n"
-        "/myorders - 📋 Order history\n"
-        "/cancel - ❌ Cancel process"
+        f"*{t('help_title', lang)}*\n\n"
+        f"{t('help_how_buy', lang)}\n"
+        f"{t('help_step1', lang)}\n"
+        f"{t('help_step2', lang)}\n"
+        f"{t('help_step3', lang)}\n"
+        f"{t('help_step4', lang)}\n"
+        f"{t('help_step5', lang)}\n\n"
+        f"{t('help_commands', lang)}\n"
+        f"{t('help_cmd_start', lang)}\n"
+        f"{t('help_cmd_produk', lang)}\n"
+        f"{t('help_cmd_beli', lang)}\n"
+        f"{t('help_cmd_stock', lang)}\n"
+        f"{t('help_cmd_myorders', lang)}\n"
+        f"{t('help_cmd_cancel', lang)}\n\n"
+        f"{t('help_lang_tip', lang)}"
     )
 
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -274,24 +294,44 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
+    lang = get_lang(context)
     products = db.get_active_products()
     total_stock = db.get_stock_count()
 
-    text = f"*📦 Stock Info*\n\n"
+    text = f"*{t('stock_info', lang)}*\n\n"
     if products:
         for p in products:
             stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-            text += f"• *{escape_md(p['name'])}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
-        text += f"\n📦 Total: *{total_stock}* accounts"
+            text += f"• *{escape_md(p['name'])}*: {stock} {t('accounts', lang)} | Rp {format_rupiah(p['price'])}/ea\n"
+        text += f"\n{t('total_stock', lang)}: *{total_stock}*"
     else:
-        text += "No products available yet."
+        text += t("no_products", lang)
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-        [btn_home()],
+        [InlineKeyboardButton(t("btn_product_list", lang), callback_data="menu:produk")],
+        [btn_home(lang)],
     ])
 
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+
+
+# ---------------------------------------------------------------------------
+# Language toggle handler
+# ---------------------------------------------------------------------------
+
+async def handle_lang_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None:
+        return
+
+    current = get_lang(context)
+    new_lang = "ms" if current == "en" else "en"
+    context.user_data["lang"] = new_lang
+
+    user = update.effective_user
+    text = build_home_text(user, new_lang)
+    uid = (user.id or 0) if user else 0
+    await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(uid, new_lang))
 
 
 # ---------------------------------------------------------------------------
@@ -299,17 +339,17 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # ---------------------------------------------------------------------------
 
 async def handle_global_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Cancel Payment button — cancel the most recent pending order."""
     query = update.callback_query
     if query is None:
         return
 
     user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context)
     orders = db.get_user_orders(user_id)
     pending = [o for o in orders if o.get("status") == "pending"]
 
     if not pending:
-        await query.answer("No pending payment to cancel.", show_alert=True)
+        await query.answer(t("cancel_no_pending", lang), show_alert=True)
         return
 
     await query.answer()
@@ -335,12 +375,12 @@ async def handle_global_cancel(update: Update, context: ContextTypes.DEFAULT_TYP
         pass
 
     user = update.effective_user
-    text = build_home_text(user) if user else "Home"
+    text = build_home_text(user, lang) if user else "Home"
     await context.bot.send_message(
         chat_id=chat_id,
         text=text,
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=get_main_menu_keyboard(user_id),
+        reply_markup=get_main_menu_keyboard(user_id, lang),
     )
 
 
@@ -349,7 +389,6 @@ async def handle_global_cancel(update: Update, context: ContextTypes.DEFAULT_TYP
 # ---------------------------------------------------------------------------
 
 async def _safe_edit_or_send(query, text: str, reply_markup=None) -> None:
-    """Try edit_message_text; if it fails (photo/deleted message), send new message instead."""
     try:
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
     except (BadRequest, Exception):
@@ -372,15 +411,16 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await query.answer()
     action = query.data.split(":")[1] if query.data else ""
+    lang = get_lang(context)
 
     if action == "start":
         user = update.effective_user
-        text = build_home_text(user)
+        text = build_home_text(user, lang)
         uid = (user.id or 0) if user else 0
-        await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(uid))
+        await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(uid, lang))
 
     elif action == "produk":
-        text = build_products_text()
+        text = build_products_text(lang)
         products = db.get_active_products()
         buttons = []
         for p in products:
@@ -388,30 +428,30 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"🛒 {p['name']} - Rp {format_rupiah(p['price'])}",
                 callback_data=f"buy:{p['id']}",
             )])
-        buttons.append([btn_home()])
+        buttons.append([btn_home(lang)])
         await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif action == "stok":
         products = db.get_active_products()
         total_stock = db.get_stock_count()
 
-        text = f"*📦 Stock Info*\n\n"
+        text = f"*{t('stock_info', lang)}*\n\n"
         if products:
             for p in products:
                 stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-                text += f"• *{escape_md(p['name'])}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
-            text += f"\n📦 Total: *{total_stock}* accounts"
+                text += f"• *{escape_md(p['name'])}*: {stock} {t('accounts', lang)} | Rp {format_rupiah(p['price'])}/ea\n"
+            text += f"\n{t('total_stock', lang)}: *{total_stock}*"
         else:
-            text += "No products available yet."
+            text += t("no_products", lang)
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-            [btn_home()],
+            [InlineKeyboardButton(t("btn_product_list", lang), callback_data="menu:produk")],
+            [btn_home(lang)],
         ])
         await _safe_edit_or_send(query, text, reply_markup=keyboard)
 
     elif action == "orders":
-        keyboard = InlineKeyboardMarkup([global_nav_row()])
+        keyboard = InlineKeyboardMarkup([global_nav_row(lang)])
         try:
             user_id = update.effective_user.id
             orders = db.get_user_orders(user_id)
@@ -419,16 +459,16 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if not orders:
                 await _safe_edit_or_send(
                     query,
-                    "No orders yet. Buy now! 🛒",
+                    t("no_orders", lang),
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-                        [btn_home()],
+                        [InlineKeyboardButton(t("btn_product_list", lang), callback_data="menu:produk")],
+                        [btn_home(lang)],
                     ]),
                 )
                 return
 
             recent = orders[:10]
-            lines = ["*📋 Order History*\n"]
+            lines = [f"{t('order_history', lang)}\n"]
 
             for o in recent:
                 order_id = o.get("id", "")
@@ -482,24 +522,13 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _safe_edit_or_send(query, text, reply_markup=get_admin_panel_keyboard())
 
     elif action == "help":
-        keyboard = InlineKeyboardMarkup([global_nav_row()])
-        text = (
-            "*❓ Help*\n\n"
-            "*How to Buy:*\n"
-            "1. Click *🛍️ Product List*\n"
-            "2. Select a product\n"
-            "3. Choose quantity\n"
-            "4. Confirm & pay via QRIS\n"
-            "5. Account is delivered automatically\n\n"
-            "*Commands:*\n"
-            "/start - 🏠 Main menu\n"
-            "/produk - 🛍️ View products\n"
-            "/beli - 🛒 Buy account\n"
-            "/stock - 📦 Check stock\n"
-            "/myorders - 📋 Order history\n"
-            "/cancel - ❌ Cancel process"
-        )
-        await _safe_edit_or_send(query, text, reply_markup=keyboard)
+        other_lang = "ms" if lang == "en" else "en"
+        context.user_data["lang"] = other_lang
+        new_lang = other_lang
+        user = update.effective_user
+        text = build_home_text(user, new_lang)
+        uid = (user.id or 0) if user else 0
+        await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(uid, new_lang))
 
 
 # ---------------------------------------------------------------------------
@@ -520,7 +549,6 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     parts = query.data.split(":")
     action = parts[1] if len(parts) > 1 else ""
 
-    # Clear any pending admin state when navigating
     for key in list(context.user_data.keys()):
         if key.startswith("admin_state") or key in ("addstock_product_id", "setprice_product_id", "addadmin_id"):
             del context.user_data[key]

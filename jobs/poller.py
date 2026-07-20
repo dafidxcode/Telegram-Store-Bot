@@ -29,6 +29,7 @@ from telegram.ext import ContextTypes
 import config
 import db
 from payments import klikqris
+from handlers.start import build_home_text, get_main_menu_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +38,6 @@ POLL_INTERVAL = 10
 
 def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
-
-
-def _get_main_menu_keyboard(user_id: int = 0):
-    rows = [
-        [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-        [
-            InlineKeyboardButton("📦 Check Stock", callback_data="menu:stok"),
-            InlineKeyboardButton("📋 Order History", callback_data="menu:orders"),
-        ],
-        [InlineKeyboardButton("❓ Help", callback_data="menu:help")],
-    ]
-    if user_id in config.ADMIN_IDS:
-        rows.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu:admin")])
-    return InlineKeyboardMarkup(rows)
 
 
 async def _cleanup_expired_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -76,8 +63,6 @@ async def _cleanup_expired_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
                 pass
 
         try:
-            from handlers.start import build_home_text, get_main_menu_keyboard
-            from telegram import Update
             user = await context.bot.get_chat(user_id)
             text = build_home_text(user)
             await context.bot.send_message(
@@ -223,14 +208,13 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                     logger.warning("Failed to delete QRIS message %s: %s", qris_msg_id, e)
 
             try:
-                from handlers.start import build_home_text, get_main_menu_keyboard
                 user = await context.bot.get_chat(user_id)
                 text = build_home_text(user)
                 await bot.send_message(
                     chat_id=user_id,
                     text=text,
                     parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=_get_main_menu_keyboard(user_id),
+                    reply_markup=get_main_menu_keyboard(user_id),
                 )
             except Exception as e:
                 logger.warning("Failed to notify user %s: %s", user_id, e)
