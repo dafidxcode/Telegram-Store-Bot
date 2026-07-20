@@ -14,6 +14,13 @@ import db
 logger = logging.getLogger(__name__)
 
 
+def escape_md(text: str) -> str:
+    """Escape characters that have special meaning in Telegram MarkdownV1."""
+    for ch in ("_", "*", "`", "["):
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
 def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
@@ -75,15 +82,15 @@ def build_home_text(user) -> str:
     sold = db.get_total_sold()
     total_users = db.get_total_users()
     user_orders = db.get_user_order_count(user.id)
-    username = f"@{user.username}" if user.username else "N/A"
-    first_name = user.first_name or "friend"
+    username = escape_md(f"@{user.username}") if user.username else "N/A"
+    first_name = escape_md(user.first_name or "friend")
     active_products = db.get_active_products()
     product_count = len(active_products)
 
     product_lines = []
     for p in active_products:
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-        product_lines.append(f"  • {p['name']}: {stock} stock | Rp {format_rupiah(p['price'])}")
+        product_lines.append(f"  • {escape_md(p['name'])}: {stock} stock | Rp {format_rupiah(p['price'])}")
 
     product_stock_text = "\n".join(product_lines) if product_lines else "  No products yet"
 
@@ -91,7 +98,7 @@ def build_home_text(user) -> str:
         f"{get_greeting()}, {first_name}!\n"
         f"📅 {get_now_wib()}\n"
         f"\n"
-        f"Welcome to *{config.SHOP_NAME}*.\n"
+        f"Welcome to *{escape_md(config.SHOP_NAME)}*.\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
         f"*👤 ACCOUNT STATS*\n"
@@ -125,11 +132,11 @@ def build_products_text() -> str:
     lines = ["*🛍️ PRODUCT LIST*\n"]
     for i, p in enumerate(products, 1):
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
-        duration = f"\n⏰ Duration: {p['duration']}" if p.get("duration") else ""
-        desc = f"\n{p['description']}" if p.get("description") else ""
+        duration = f"\n⏰ Duration: {escape_md(p['duration'])}" if p.get("duration") else ""
+        desc = f"\n{escape_md(p['description'])}" if p.get("description") else ""
 
         lines.append(
-            f"*{i}. {p['name']}*\n"
+            f"*{i}. {escape_md(p['name'])}*\n"
             f"{desc}{duration}\n"
             f"💰 Price: *Rp {format_rupiah(p['price'])}*\n"
             f"📦 Stock: *{stock}* {'accounts' if p['stock_type'] == 'limited' else ''}\n"
@@ -227,7 +234,7 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     buttons = []
     for p in products:
         buttons.append([InlineKeyboardButton(
-            f"🛒 {p['name']} - Rp {format_rupiah(p['price'])}",
+            f"🛒 {escape_md(p['name'])} - Rp {format_rupiah(p['price'])}",
             callback_data=f"buy:{p['id']}",
         )])
     buttons.append([btn_home()])
@@ -274,7 +281,7 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if products:
         for p in products:
             stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-            text += f"• *{p['name']}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
+            text += f"• *{escape_md(p['name'])}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
         text += f"\n📦 Total: *{total_stock}* accounts"
     else:
         text += "No products available yet."
@@ -296,18 +303,16 @@ async def handle_global_cancel(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     if query is None:
         return
-    await query.answer()
 
     user_id = update.effective_user.id if update.effective_user else 0
     orders = db.get_user_orders(user_id)
     pending = [o for o in orders if o.get("status") == "pending"]
 
     if not pending:
-        try:
-            await query.answer("No pending payment to cancel.", show_alert=True)
-        except Exception:
-            pass
+        await query.answer("No pending payment to cancel.", show_alert=True)
         return
+
+    await query.answer()
 
     order = pending[0]
     order_id = order["id"]
@@ -394,7 +399,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if products:
             for p in products:
                 stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-                text += f"• *{p['name']}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
+                text += f"• *{escape_md(p['name'])}*: {stock} accounts | Rp {format_rupiah(p['price'])}/ea\n"
             text += f"\n📦 Total: *{total_stock}* accounts"
         else:
             text += "No products available yet."
@@ -432,7 +437,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 status = o.get("status", "pending")
                 emoji = _STATUS_EMOJI.get(status, "⏳")
                 product = db.get_product(o.get("product_id", 1))
-                product_name = product["name"] if product else "N/A"
+                product_name = escape_md(product["name"]) if product else "N/A"
                 lines.append(f"#{order_id} | {product_name} x{qty} | Rp {format_rupiah(total)} | {emoji} {status}")
 
             await _safe_edit_or_send(query, "\n".join(lines), reply_markup=keyboard)
@@ -455,7 +460,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         product_lines = []
         for p in products:
             p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-            product_lines.append(f"  #{p['id']} {p['name']}: {p_stock} stock | Rp {format_rupiah(p['price'])}")
+            product_lines.append(f"  #{p['id']} {escape_md(p['name'])}: {p_stock} stock | Rp {format_rupiah(p['price'])}")
 
         product_stock_text = "\n".join(product_lines) if product_lines else "  No products"
 
@@ -535,7 +540,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
             status = "✅" if p["is_active"] else "❌"
             lines.append(
-                f"{status} #{p['id']} | *{p['name']}*\n"
+                f"{status} #{p['id']} | *{escape_md(p['name'])}*\n"
                 f"   💰 Price: Rp {format_rupiah(p['price'])}\n"
                 f"   📦 Stock: {stock}\n"
             )
@@ -559,7 +564,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         for p in products:
             p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-            text += f"\n#{p['id']} {p['name']}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
+            text += f"\n#{p['id']} {escape_md(p['name'])}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
 
         await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard())
 
@@ -586,7 +591,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             emoji = _STATUS_EMOJI.get(status, "⏳")
             order_id = o["id"]
             product = db.get_product(o.get("product_id", 1))
-            product_name = product["name"] if product else "N/A"
+            product_name = escape_md(product["name"]) if product else "N/A"
 
             lines.append(
                 f"#{order_id} | @{username}\n"
@@ -629,7 +634,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             username = o.get("username") or "no_user"
             order_id = o["id"]
             product = db.get_product(o.get("product_id", 1))
-            product_name = product["name"] if product else "N/A"
+            product_name = escape_md(product["name"]) if product else "N/A"
             lines.append(
                 f"#{order_id} | @{username}\n"
                 f"📦 {product_name}\n"
@@ -670,7 +675,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             username = o.get("username") or "no_user"
             order_id = o["id"]
             product = db.get_product(o.get("product_id", 1))
-            product_name = product["name"] if product else "N/A"
+            product_name = escape_md(product["name"]) if product else "N/A"
             lines.append(
                 f"#{order_id} | @{username}\n"
                 f"📦 {product_name}\n"
@@ -755,7 +760,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["setprice_product_id"] = product_id
 
         text = (
-            f"*💰 CHANGE PRICE — {product['name']}*\n"
+            f"*💰 CHANGE PRICE — {escape_md(product['name'])}*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Current price: *Rp {format_rupiah(product['price'])}*\n\n"
             "📝 Send the *new price* now.\n\n"
@@ -867,7 +872,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["state"] = "addstock"
 
         text = (
-            f"*📥 ADD STOCK — {product['name']}*\n"
+            f"*📥 ADD STOCK — {escape_md(product['name'])}*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Current stock: *{db.get_stock_count(product_id)}* accounts\n\n"
             "*Method 1:* Send a .txt file\n"

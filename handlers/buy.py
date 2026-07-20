@@ -28,6 +28,7 @@ from handlers.start import (
     btn_back,
     btn_cancel_payment,
     global_nav_keyboard,
+    escape_md,
 )
 
 logger = logging.getLogger(__name__)
@@ -136,7 +137,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
         f"✅ ORDER CREATED\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🆔 ID: {order_id}\n"
-        f"📦 Product: {product['name']}\n"
+        f"📦 Product: {escape_md(product['name'])}\n"
         f"🔢 Quantity: {quantity} accounts\n"
         f"💰 Total: Rp {format_rupiah(qris_nominal)}\n"
         f"⏳ Status: {api_status}\n"
@@ -157,30 +158,33 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     if sent_msg is None and qris_image_b64:
         try:
             photo_file = io.BytesIO(qris_image_b64)
+            photo_file.seek(0)
             photo_file.name = f"qris_{order_id}.png"
+            logger.info("Sending QRIS photo (b64 len=%d, file name=%s)", len(qris_image_b64), photo_file.name)
             sent_msg = await context.bot.send_photo(
                 chat_id=user.id,
                 photo=photo_file,
                 caption=caption,
                 reply_markup=order_keyboard,
             )
-            logger.info("QRIS base64 image sent for %s", order_id)
+            logger.info("QRIS base64 image sent for %s, msg_id=%s", order_id, sent_msg.message_id if sent_msg else None)
         except Exception as e:
-            logger.warning("Failed to send QRIS base64 for %s: %s", order_id, e)
+            logger.warning("Failed to send QRIS base64 for %s: %s", order_id, e, exc_info=True)
             sent_msg = None
 
     # --- Strategy 2: URL from qris_url ---
     if sent_msg is None and qris_image_url:
         try:
+            logger.info("Sending QRIS photo via URL: %s", qris_image_url[:80])
             sent_msg = await context.bot.send_photo(
                 chat_id=user.id,
                 photo=qris_image_url,
                 caption=caption,
                 reply_markup=order_keyboard,
             )
-            logger.info("QRIS image URL sent for %s", order_id)
+            logger.info("QRIS image URL sent for %s, msg_id=%s", order_id, sent_msg.message_id if sent_msg else None)
         except Exception as e:
-            logger.warning("Failed to send QRIS URL for %s: %s", order_id, e)
+            logger.warning("Failed to send QRIS URL for %s: %s", order_id, e, exc_info=True)
             sent_msg = None
 
     # --- Strategy 3: render QR code from qris_content string ---
@@ -211,7 +215,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             f"*✅ ORDER CREATED*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: `{order_id}`\n"
-            f"📦 Product: *{product['name']}*\n"
+            f"📦 Product: *{escape_md(product['name'])}*\n"
             f"🔢 Quantity: *{quantity}* accounts\n"
             f"💰 Total: *Rp {format_rupiah(qris_nominal)}*\n"
             f"⏳ Status: *{api_status}*\n"
@@ -329,7 +333,7 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     for p in products:
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
         buttons.append([InlineKeyboardButton(
-            f"🛒 {p['name']} - Rp {format_rupiah(p['price'])} (📦 {stock})",
+            f"🛒 {escape_md(p['name'])} - Rp {format_rupiah(p['price'])} (📦 {stock})",
             callback_data=f"buy:{p['id']}",
         )])
     buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")])
@@ -362,7 +366,7 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
     stock = db.get_stock_count(product_id) if product["stock_type"] == "limited" else None
     if product["stock_type"] == "limited" and (stock is None or stock <= 0):
         await query.edit_message_text(
-            f"Sorry, *{product['name']}* is out of stock.\n\n"
+            f"Sorry, *{escape_md(product['name'])}* is out of stock.\n\n"
             "Please choose another product or wait for restock.",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=get_main_menu_keyboard(update.effective_user.id if update.effective_user else 0),
@@ -388,7 +392,7 @@ async def _show_product_detail(query, product, qty, stock):
         detail_text = "\n".join(f"• {line.strip()}" for line in detail_lines if line.strip()) + "\n\n"
 
     text = (
-        f"*{product['name']}*\n"
+        f"*{escape_md(product['name'])}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"*📋 Product Details*\n"
         f"{detail_text}"
@@ -442,7 +446,7 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif action == "input":
         await query.edit_message_text(
             f"*⌨️ Enter Quantity*\n\n"
-            f"Product: *{product['name']}*\n"
+            f"Product: *{escape_md(product['name'])}*\n"
             f"Price: *Rp {format_rupiah(product['price'])}/account*\n"
             f"Stock: *{stock if stock else '∞'}*\n\n"
             f"Type a number and send it.\n"
@@ -510,7 +514,7 @@ async def receive_manual_jumlah(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
     await message.reply_text(
-        f"⏳ Creating order for *{product['name']}* x{qty}...",
+        f"⏳ Creating order for *{escape_md(product['name'])}* x{qty}...",
         parse_mode=ParseMode.MARKDOWN,
     )
     order_id, sent_msg = await _create_order_and_pay(context, user, product, qty, message=message)
@@ -523,7 +527,7 @@ async def _show_confirm(query, context, product, qty):
     text = (
         f"*✅ Order Confirmation*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 Product: *{product['name']}*\n"
+        f"📦 Product: *{escape_md(product['name'])}*\n"
         f"🔢 Quantity: *{qty}* accounts\n"
         f"💰 Price: Rp {format_rupiah(product['price'])}/account\n"
         f"💵 Total: *Rp {format_rupiah(total)}*\n"
@@ -625,7 +629,7 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             status = o.get("status", "pending")
             emoji = _STATUS_EMOJI.get(status, "⏳")
             product = db.get_product(o.get("product_id", 1))
-            product_name = product["name"] if product else "N/A"
+            product_name = escape_md(product["name"]) if product else "N/A"
 
             created = o.get("created_at", "")
             if created:

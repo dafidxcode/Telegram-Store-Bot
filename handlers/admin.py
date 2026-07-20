@@ -29,7 +29,7 @@ from telegram.ext import (
 
 import config
 import db
-from handlers.start import btn_home
+from handlers.start import btn_home, escape_md
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         await message.reply_text(
             f"*✅ Product added!*\n\n"
             f"🆔 ID: `{product_id}`\n"
-            f"📦 Name: *{name}*\n"
+            f"📦 Name: *{escape_md(name)}*\n"
             f"💰 Price: *Rp {format_rupiah(price)}*\n"
             f"📝 Description: {desc or '-'}",
             parse_mode=ParseMode.MARKDOWN,
@@ -220,9 +220,8 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         if product_id:
             db.update_product(product_id, price=new_price)
             product = db.get_product(product_id)
-            product_name = product["name"] if product else "Unknown"
+            product_name = escape_md(product["name"]) if product else "Unknown"
             await message.reply_text(
-                f"*✅ Price updated!*\n\n"
                 f"📦 Product: *{product_name}*\n"
                 f"💰 New price: *Rp {format_rupiah(new_price)}*",
                 parse_mode=ParseMode.MARKDOWN,
@@ -504,7 +503,7 @@ async def cmd_delproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     db.delete_product(product_id)
     await update.message.reply_text(
         f"*🗑️ Product deleted!*\n\n"
-        f"📦 Name: *{product['name']}*",
+        f"📦 Name: *{escape_md(product['name'])}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(),
     )
@@ -529,7 +528,7 @@ async def cmd_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
         status = "✅" if p["is_active"] else "❌"
         lines.append(
-            f"{status} #{p['id']} | *{p['name']}*\n"
+            f"{status} #{p['id']} | *{escape_md(p['name'])}*\n"
             f"   💰 Price: Rp {format_rupiah(p['price'])}\n"
             f"   📦 Stock: {stock}\n"
         )
@@ -674,7 +673,7 @@ async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
     for p in products:
         p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-        text += f"\n#{p['id']} {p['name']}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
+        text += f"\n#{p['id']} {escape_md(p['name'])}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
 
     await update.message.reply_text(
         text,
@@ -720,7 +719,7 @@ async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         emoji = _STATUS_EMOJI.get(status, "⏳")
         order_id = o["id"]
         product = db.get_product(o.get("product_id", 1))
-        product_name = product["name"] if product else "N/A"
+        product_name = escape_md(product["name"]) if product else "N/A"
 
         lines.append(
             f"#{order_id} | @{username}\n"
