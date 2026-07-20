@@ -80,6 +80,8 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     qris_image_url = None
     qris_content = None
     qris_image_b64 = None
+    api_expired_at = ""
+    api_status = "PENDING"
     if klikqris.is_active():
         try:
             result = await klikqris.get().create_qris(
@@ -89,6 +91,9 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             )
             qris_data = result.get("data") or {}
             logger.info("KlikQRIS response keys: %s", list(qris_data.keys()))
+
+            api_expired_at = qris_data.get("expired_at", "")
+            api_status = qris_data.get("status", "PENDING")
 
             # Extract image — KlikQRIS PG returns qris_image as data:image/png;base64,...
             raw_qris_image = (
@@ -134,13 +139,17 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
         f"📦 Product: {product['name']}\n"
         f"🔢 Quantity: {quantity} accounts\n"
         f"💰 Total: Rp {format_rupiah(qris_nominal)}\n"
-        f"⏳ Status: awaiting payment\n"
-        f"⏰ Expires: 30 minutes\n"
+        f"⏳ Status: {api_status}\n"
+        f"⏰ Expires: {api_expired_at}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "📱 Scan the QRIS above to pay.\n"
         "Account will be delivered automatically after payment. 🤖\n"
         "Check status: /myorders"
     )
+
+    order_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel Payment", callback_data=f"order:cancel:{order_id}")],
+    ])
 
     sent_msg = None
 
@@ -153,6 +162,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
                 chat_id=user.id,
                 photo=photo_file,
                 caption=caption,
+                reply_markup=order_keyboard,
             )
             logger.info("QRIS base64 image sent for %s", order_id)
         except Exception as e:
@@ -166,6 +176,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
                 chat_id=user.id,
                 photo=qris_image_url,
                 caption=caption,
+                reply_markup=order_keyboard,
             )
             logger.info("QRIS image URL sent for %s", order_id)
         except Exception as e:
@@ -187,6 +198,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
                 chat_id=user.id,
                 photo=buf,
                 caption=caption,
+                reply_markup=order_keyboard,
             )
             logger.info("QRIS rendered from qris_content for %s", order_id)
         except Exception as e:
@@ -202,8 +214,8 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             f"📦 Product: *{product['name']}*\n"
             f"🔢 Quantity: *{quantity}* accounts\n"
             f"💰 Total: *Rp {format_rupiah(qris_nominal)}*\n"
-            f"⏳ Status: awaiting payment\n"
-            f"⏰ Expires: 30 minutes\n"
+            f"⏳ Status: *{api_status}*\n"
+            f"⏰ Expires: *{api_expired_at}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             "QRIS image is being generated. 🔄\n"
             "Check status at /myorders."
@@ -212,6 +224,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             chat_id=user.id,
             text=text,
             parse_mode=ParseMode.MARKDOWN,
+            reply_markup=order_keyboard,
         )
 
     if sent_msg:
@@ -221,7 +234,41 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     return order_id, sent_msg
 
 
+async def handle_order_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cancel an order from the QRIS payment screen."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+
+    parts = query.data.split(":")
+    if len(parts) < 3:
+        return
+    order_id = parts[2]
+
+    order = db.get_order(order_id)
+    if not order or order["status"] != "pending":
+        await query.answer("Order already processed.", show_alert=True)
+        return
+
+    db.update_order_status(order_id, "cancelled")
+    db.release_stock(order_id)
+    logger.info("Order %s cancelled by user via Cancel button", order_id)
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    uid = user_id or 0
+    await query.edit_message_caption(
+        caption=(
+            f"❌ Order *#{order_id}* cancelled\n\n"
+            f"Create a new order below 👇"
+        ),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=get_main_menu_keyboard(uid),
+    )
+
+
 def register(app: Application) -> None:
+    app.add_handler(CallbackQueryHandler(handle_order_cancel, pattern=r"^order:cancel:"))
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("beli", cmd_beli),
