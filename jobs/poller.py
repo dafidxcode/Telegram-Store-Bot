@@ -23,6 +23,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 import config
@@ -75,15 +76,15 @@ async def _cleanup_expired_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
                 pass
 
         try:
+            from handlers.start import build_home_text, get_main_menu_keyboard
+            from telegram import Update
+            user = await context.bot.get_chat(user_id)
+            text = build_home_text(user)
             await context.bot.send_message(
                 chat_id=user_id,
-                text=(
-                    f"❌ Order *#{order_id}* has expired\n"
-                    f"(payment not received within 30 minutes)\n\n"
-                    f"Create a new order below 👇"
-                ),
-                parse_mode="Markdown",
-                reply_markup=_get_main_menu_keyboard(user_id),
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu_keyboard(user_id),
             )
         except Exception as e:
             logger.warning("Failed to notify user %s about local expiry: %s", user_id, e)
@@ -222,14 +223,13 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                     logger.warning("Failed to delete QRIS message %s: %s", qris_msg_id, e)
 
             try:
+                from handlers.start import build_home_text, get_main_menu_keyboard
+                user = await context.bot.get_chat(user_id)
+                text = build_home_text(user)
                 await bot.send_message(
                     chat_id=user_id,
-                    text=(
-                        f"❌ Order *#{order_id}* has expired/been cancelled\n"
-                        f"(status: {payment_status})\n\n"
-                        f"Create a new order below 👇"
-                    ),
-                    parse_mode="Markdown",
+                    text=text,
+                    parse_mode=ParseMode.MARKDOWN,
                     reply_markup=_get_main_menu_keyboard(user_id),
                 )
             except Exception as e:

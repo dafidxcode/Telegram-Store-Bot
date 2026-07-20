@@ -235,7 +235,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
 
 
 async def handle_order_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cancel an order from the QRIS payment screen."""
+    """Cancel order, delete QRIS message, show home menu silently."""
     query = update.callback_query
     if query is None:
         return
@@ -248,7 +248,6 @@ async def handle_order_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     order = db.get_order(order_id)
     if not order or order["status"] != "pending":
-        await query.answer("Order already processed.", show_alert=True)
         return
 
     db.update_order_status(order_id, "cancelled")
@@ -256,14 +255,23 @@ async def handle_order_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info("Order %s cancelled by user via Cancel button", order_id)
 
     user_id = update.effective_user.id if update.effective_user else 0
-    uid = user_id or 0
-    await query.edit_message_caption(
-        caption=(
-            f"❌ Order *#{order_id}* cancelled\n\n"
-            f"Create a new order below 👇"
-        ),
+    chat_id = query.message.chat_id if query.message else user_id
+
+    # Delete the QRIS message entirely
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=query.message.message_id)
+    except Exception:
+        pass
+
+    # Send home menu directly — no cancellation notification
+    from handlers.start import build_home_text, get_main_menu_keyboard
+    user = update.effective_user
+    text = build_home_text(user)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=get_main_menu_keyboard(uid),
+        reply_markup=get_main_menu_keyboard(user_id),
     )
 
 

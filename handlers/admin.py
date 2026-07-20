@@ -135,6 +135,162 @@ def register(app: Application) -> None:
 
 async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """If in addstock mode, try parsing as email:password. Otherwise try quick-add product."""
+    # Handle interactive admin states
+    admin_state = context.user_data.get("admin_state")
+
+    if admin_state == "addproduct_name":
+        message = update.message
+        if message is None or not message.text:
+            return
+        name = message.text.strip()
+        if not name:
+            await message.reply_text("Name cannot be empty. Send product name:")
+            return
+        context.user_data["admin_state"] = "addproduct_price"
+        context.user_data["addproduct_name"] = name
+        await message.reply_text(
+            f"📦 Product name: *{name}*\n\n📝 Send the *price* (number only).\nExample: `15000`",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+        return
+
+    if admin_state == "addproduct_price":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            price = int(message.text.strip().replace(".", "").replace(",", ""))
+        except ValueError:
+            await message.reply_text("Price must be a number. Send again:")
+            return
+        if price <= 0:
+            await message.reply_text("Price must be > 0. Send again:")
+            return
+        context.user_data["admin_state"] = "addproduct_desc"
+        context.user_data["addproduct_price"] = price
+        await message.reply_text(
+            f"💰 Price: *Rp {format_rupiah(price)}*\n\n📝 Send the *description* (or send `-` to skip).",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+        return
+
+    if admin_state == "addproduct_desc":
+        message = update.message
+        if message is None or not message.text:
+            return
+        desc = message.text.strip()
+        if desc == "-":
+            desc = ""
+        name = context.user_data.pop("addproduct_name", "")
+        price = context.user_data.pop("addproduct_price", 0)
+        context.user_data.pop("admin_state", None)
+
+        if not name or price <= 0:
+            await message.reply_text("Something went wrong. Start again.", reply_markup=_admin_back_keyboard())
+            return
+
+        product_id = db.add_product(name=name, description=desc, price=price)
+        await message.reply_text(
+            f"*✅ Product added!*\n\n"
+            f"🆔 ID: `{product_id}`\n"
+            f"📦 Name: *{name}*\n"
+            f"💰 Price: *Rp {format_rupiah(price)}*\n"
+            f"📝 Description: {desc or '-'}",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+        return
+
+    if admin_state == "setprice_value":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            new_price = int(message.text.strip().replace(".", "").replace(",", ""))
+        except ValueError:
+            await message.reply_text("Price must be a number. Send again:")
+            return
+        if new_price <= 0:
+            await message.reply_text("Price must be > 0. Send again:")
+            return
+        product_id = context.user_data.pop("setprice_product_id", None)
+        context.user_data.pop("admin_state", None)
+        if product_id:
+            db.update_product(product_id, price=new_price)
+            product = db.get_product(product_id)
+            product_name = product["name"] if product else "Unknown"
+            await message.reply_text(
+                f"*✅ Price updated!*\n\n"
+                f"📦 Product: *{product_name}*\n"
+                f"💰 New price: *Rp {format_rupiah(new_price)}*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=_admin_back_keyboard(),
+            )
+        else:
+            await message.reply_text("Something went wrong.", reply_markup=_admin_back_keyboard())
+        return
+
+    if admin_state == "broadcast_msg":
+        message = update.message
+        if message is None or not message.text:
+            return
+        text = message.text.strip()
+        context.user_data.pop("admin_state", None)
+
+        try:
+            user_ids = db.get_all_user_ids()
+        except Exception:
+            await message.reply_text("Failed to get users.", reply_markup=_admin_back_keyboard())
+            return
+
+        success = 0
+        failed = 0
+        for uid in user_ids:
+            try:
+                await context.bot.send_message(chat_id=uid, text=text, parse_mode=ParseMode.MARKDOWN)
+                success += 1
+            except Exception:
+                failed += 1
+
+        await message.reply_text(
+            f"*✅ Broadcast complete!*\n\n"
+            f"📤 Sent: *{success}* users\n"
+            f"❌ Failed: *{failed}* users",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+        return
+
+    if admin_state == "addadmin_id":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            new_admin_id = int(message.text.strip())
+        except ValueError:
+            await message.reply_text("ID must be a number. Send again:")
+            return
+        context.user_data.pop("admin_state", None)
+        if new_admin_id in config.ADMIN_IDS:
+            await message.reply_text(
+                f"ID `{new_admin_id}` is already an admin.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=_admin_back_keyboard(),
+            )
+            return
+        config.ADMIN_IDS.add(new_admin_id)
+        await message.reply_text(
+            f"*✅ Admin added!*\n\n"
+            f"🆔 ID: `{new_admin_id}`\n"
+            f"👥 Total admins: *{len(config.ADMIN_IDS)}*",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(),
+        )
+        return
+
+    # Handle addstock mode
     addstock_pid = context.user_data.get("addstock_product_id")
     if addstock_pid:
         message = update.message
