@@ -29,6 +29,9 @@ from handlers.start import (
     btn_cancel_payment,
     global_nav_keyboard,
     escape_md,
+    get_lang,
+    t,
+    format_rupiah,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,26 +40,9 @@ JUMLAH = 0
 KONFIRMASI = 1
 
 
-def format_rupiah(n: int) -> str:
-    return f"{n:,}".replace(",", ".")
-
-
-def get_main_menu_keyboard(user_id: int = 0):
-    rows = [
-        [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-        [
-            InlineKeyboardButton("📦 Check Stock", callback_data="menu:stok"),
-            InlineKeyboardButton("📋 Order History", callback_data="menu:orders"),
-        ],
-        [InlineKeyboardButton("❓ Help", callback_data="menu:help")],
-    ]
-    if user_id in config.ADMIN_IDS:
-        rows.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu:admin")])
-    return InlineKeyboardMarkup(rows)
-
-
 async def _create_order_and_pay(context, user, product, quantity, query=None, message=None):
     """Shared logic: create order, call QRIS API, send QRIS image, or fallback text."""
+    lang = get_lang(context, user.id)
     total = product["price"] * quantity
     qris_nominal = total
     expires_at = (datetime.now(tz=timezone(timedelta(hours=7))) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
@@ -71,11 +57,11 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     except Exception as exc:
         logger.exception("Failed to create order: %s", exc)
         uid = user.id or 0
-        text = "Sorry, failed to create order. Please try again."
+        text = t("admin_try_again", lang)
         if query:
-            await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(uid))
+            await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(uid, lang))
         elif message:
-            await message.reply_text(text, reply_markup=get_main_menu_keyboard(uid))
+            await message.reply_text(text, reply_markup=get_main_menu_keyboard(uid, lang))
         return None, None
 
     qris_image_url = None
@@ -96,7 +82,6 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             api_expired_at = qris_data.get("expired_at", "")
             api_status = qris_data.get("status", "PENDING")
 
-            # Extract image — KlikQRIS PG returns qris_image as data:image/png;base64,...
             raw_qris_image = (
                 qris_data.get("qris_image")
                 or qris_data.get("image_url")
@@ -110,7 +95,6 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
                 or qris_data.get("qrContent")
             )
 
-            # Decode base64 inline image
             if raw_qris_image:
                 qris_image_b64 = klikqris.KlikQRIS.decode_qris_image(raw_qris_image)
 
@@ -134,22 +118,22 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             pass
 
     caption = (
-        f"✅ ORDER CREATED\n"
+        f"✅ {t('order_created', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🆔 ID: {order_id}\n"
-        f"📦 Product: {escape_md(product['name'])}\n"
-        f"🔢 Quantity: {quantity} accounts\n"
+        f"📦 {t('product_label', lang)}: {escape_md(product['name'])}\n"
+        f"🔢 {t('quantity_label', lang)}: {quantity} {t('accounts_label', lang)}\n"
         f"💰 Total: Rp {format_rupiah(qris_nominal)}\n"
-        f"⏳ Status: {api_status}\n"
-        f"⏰ Expires: {api_expired_at}\n"
+        f"⏳ {t('status_label', lang)}: {api_status}\n"
+        f"⏰ {t('expires_label', lang)}: {api_expired_at}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📱 Scan the QRIS above to pay.\n"
-        "Account will be delivered automatically after payment. 🤖\n"
-        "Check status: /myorders"
+        f"{t('scan_qris', lang)}\n"
+        f"{t('auto_deliver', lang)}\n"
+        f"{t('check_myorders', lang)}"
     )
 
     order_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel Payment", callback_data=f"order:cancel:{order_id}")],
+        [InlineKeyboardButton(t("btn_cancel_order", lang), callback_data=f"order:cancel:{order_id}")],
     ])
 
     sent_msg = None
@@ -212,17 +196,16 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     # --- Fallback: text only ---
     if sent_msg is None:
         text = (
-            f"*✅ ORDER CREATED*\n"
+            f"*✅ {t('order_created', lang)}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: `{order_id}`\n"
-            f"📦 Product: *{escape_md(product['name'])}*\n"
-            f"🔢 Quantity: *{quantity}* accounts\n"
+            f"📦 {t('product_label', lang)}: *{escape_md(product['name'])}*\n"
+            f"🔢 {t('quantity_label', lang)}: *{quantity}* {t('accounts_label', lang)}\n"
             f"💰 Total: *Rp {format_rupiah(qris_nominal)}*\n"
-            f"⏳ Status: *{api_status}*\n"
-            f"⏰ Expires: *{api_expired_at}*\n"
+            f"⏳ {t('status_label', lang)}: *{api_status}*\n"
+            f"⏰ {t('expires_label', lang)}: *{api_expired_at}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "QRIS image is being generated. 🔄\n"
-            "Check status at /myorders."
+            f"{t('qr_processing', lang)}"
         )
         sent_msg = await context.bot.send_message(
             chat_id=user.id,
@@ -234,7 +217,11 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     if sent_msg:
         db.set_order_qris_message_id(order_id, sent_msg.message_id)
 
-    context.user_data.clear()
+    context.user_data.pop("product_id", None)
+    context.user_data.pop("product", None)
+    context.user_data.pop("qty", None)
+    context.user_data.pop("state", None)
+    context.user_data.pop("admin_state", None)
     return order_id, sent_msg
 
 
@@ -261,21 +248,20 @@ async def handle_order_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id if update.effective_user else 0
     chat_id = query.message.chat_id if query.message else user_id
 
-    # Delete the QRIS message entirely
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=query.message.message_id)
     except Exception:
         pass
 
-    # Send home menu directly — no cancellation notification
-    from handlers.start import build_home_text, get_main_menu_keyboard
+    lang = get_lang(context, user_id)
     user = update.effective_user
-    text = build_home_text(user)
+    from handlers.start import build_home_text, get_main_menu_keyboard
+    text = build_home_text(user, lang)
     await context.bot.send_message(
         chat_id=chat_id,
         text=text,
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=get_main_menu_keyboard(user_id),
+        reply_markup=get_main_menu_keyboard(user_id, lang),
     )
 
 
@@ -312,10 +298,15 @@ async def handle_cancel_btn(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     if query:
         await query.answer()
-    context.user_data.clear()
-    uid = (update.effective_user.id or 0) if update.effective_user else 0
+    user_id = (update.effective_user.id or 0) if update.effective_user else 0
+    lang = get_lang(context, user_id)
+    context.user_data.pop("product_id", None)
+    context.user_data.pop("product", None)
+    context.user_data.pop("qty", None)
+    context.user_data.pop("state", None)
+    context.user_data.pop("admin_state", None)
     if query:
-        await query.edit_message_text("Cancelled. ❌", reply_markup=get_main_menu_keyboard(uid))
+        await query.edit_message_text(t("cancelled", lang), reply_markup=get_main_menu_keyboard(user_id, lang))
     return ConversationHandler.END
 
 
@@ -324,9 +315,12 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if message is None:
         return ConversationHandler.END
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     products = db.get_active_products()
     if not products:
-        await message.reply_text("No products available yet. Please wait for admin to add products.")
+        await message.reply_text(t("no_products_available", lang))
         return ConversationHandler.END
 
     buttons = []
@@ -336,10 +330,10 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             f"🛒 {escape_md(p['name'])} - Rp {format_rupiah(p['price'])} (📦 {stock})",
             callback_data=f"buy:{p['id']}",
         )])
-    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")])
+    buttons.append([InlineKeyboardButton(t("cancel", lang), callback_data="buy:cancel")])
 
     await message.reply_text(
-        "*🛍️ Select Product*\n\nChoose a product to purchase:",
+        f"*{t('select_product_title', lang)}*\n\n{t('choose_product', lang)}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -353,6 +347,9 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
 
     await query.answer()
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     try:
         product_id = int(query.data.split(":")[1])
     except (IndexError, ValueError):
@@ -360,16 +357,15 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
 
     product = db.get_product(product_id)
     if not product or not product["is_active"]:
-        await query.edit_message_text("Product is not available.")
+        await query.edit_message_text(t("product_not_available", lang))
         return ConversationHandler.END
 
     stock = db.get_stock_count(product_id) if product["stock_type"] == "limited" else None
     if product["stock_type"] == "limited" and (stock is None or stock <= 0):
         await query.edit_message_text(
-            f"Sorry, *{escape_md(product['name'])}* is out of stock.\n\n"
-            "Please choose another product or wait for restock.",
+            t("out_of_stock", lang, name=escape_md(product['name'])),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=get_main_menu_keyboard(update.effective_user.id if update.effective_user else 0),
+            reply_markup=get_main_menu_keyboard(user_id, lang),
         )
         return ConversationHandler.END
 
@@ -377,13 +373,14 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data["product"] = product
     context.user_data["qty"] = 1
 
-    await _show_product_detail(query, product, 1, stock)
+    await _show_product_detail(query, product, 1, stock, lang)
     return JUMLAH
 
 
-async def _show_product_detail(query, product, qty, stock):
+async def _show_product_detail(query, product, qty, stock, lang="en"):
     total = product["price"] * qty
-    stock_text = f"{stock} accounts" if stock else "Unlimited"
+    stock_text = f"{stock} {t('accounts', lang)}" if stock else t("unlimited", lang)
+    price_str = format_rupiah(product['price'])
 
     detail = product.get("description", "")
     detail_lines = detail.split("\n") if detail else []
@@ -394,18 +391,18 @@ async def _show_product_detail(query, product, qty, stock):
     text = (
         f"*{escape_md(product['name'])}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*📋 Product Details*\n"
+        f"*{t('product_details', lang)}*\n"
         f"{detail_text}"
-        f"*💰 Pricing*\n"
-        f"All quantities    : Rp {format_rupiah(product['price'])} / account\n\n"
-        f"*📦 Stock*\n"
-        f"• Available : {stock_text}\n"
-        f"• Minimum   : 1 account\n"
+        f"*{t('pricing', lang)}*\n"
+        f"{t('pricing_per_account', lang, price=price_str)}\n\n"
+        f"*{t('stock_heading', lang)}*\n"
+        f"• {t('available', lang)} : {stock_text}\n"
+        f"• {t('minimum', lang)}   : 1 {t('accounts', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*🛒 Your Order*\n"
-        f"Quantity    : {qty} accounts\n"
-        f"Price       : Rp {format_rupiah(product['price'])}\n"
-        f"Total       : Rp {format_rupiah(total)}\n"
+        f"*{t('your_order', lang)}*\n"
+        f"{t('quantity', lang)}    : {qty} {t('accounts', lang)}\n"
+        f"{t('price', lang)}       : Rp {price_str}\n"
+        f"{t('total', lang)}       : Rp {format_rupiah(total)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
@@ -415,9 +412,9 @@ async def _show_product_detail(query, product, qty, stock):
             InlineKeyboardButton(str(qty), callback_data="cart:noop"),
             InlineKeyboardButton("➕", callback_data="cart:plus"),
         ],
-        [InlineKeyboardButton("⌨️ Enter Quantity Manually", callback_data="cart:input")],
-        [InlineKeyboardButton(f"💳 Pay via QRIS - Rp {format_rupiah(total)}", callback_data="cart:custom")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")],
+        [InlineKeyboardButton(t("enter_qty_manually", lang), callback_data="cart:input")],
+        [InlineKeyboardButton(t("pay_qris", lang, total=format_rupiah(total)), callback_data="cart:custom")],
+        [InlineKeyboardButton(t("cancel", lang), callback_data="buy:cancel")],
     ])
 
     await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -429,6 +426,9 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return JUMLAH
 
     await query.answer()
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
 
     action = query.data.split(":")[1]
     product = context.user_data.get("product")
@@ -445,12 +445,12 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
         qty = min(qty + 1, max_qty)
     elif action == "input":
         await query.edit_message_text(
-            f"*⌨️ Enter Quantity*\n\n"
-            f"Product: *{escape_md(product['name'])}*\n"
-            f"Price: *Rp {format_rupiah(product['price'])}/account*\n"
-            f"Stock: *{stock if stock else '∞'}*\n\n"
-            f"Type a number and send it.\n"
-            f"Example: type *5* to buy 5 accounts.",
+            f"*{t('enter_quantity_title', lang)}*\n\n"
+            f"{t('product_label', lang)}: *{escape_md(product['name'])}*\n"
+            f"{t('price', lang)}: *Rp {format_rupiah(product['price'])}/{t('accounts', lang)}*\n"
+            f"{t('stock', lang)}: *{stock if stock else '∞'}*\n\n"
+            f"{t('type_number', lang)}\n"
+            f"{t('example_type', lang, n=5)}",
             parse_mode=ParseMode.MARKDOWN,
         )
         context.user_data["state"] = "input_qty"
@@ -463,18 +463,18 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
         stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
         if stock is not None and qty > stock:
             await query.edit_message_text(
-                f"Insufficient stock. Available: *{stock}* accounts.",
+                t("insufficient_stock", lang, stock=stock),
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=get_main_menu_keyboard(user.id),
+                reply_markup=get_main_menu_keyboard(user_id, lang),
             )
             return ConversationHandler.END
 
-        await query.edit_message_text("⏳ Creating order & QRIS...", parse_mode=ParseMode.MARKDOWN)
+        await query.edit_message_text(t("creating_order", lang), parse_mode=ParseMode.MARKDOWN)
         order_id, sent_msg = await _create_order_and_pay(context, user, product, qty, query=query)
         return ConversationHandler.END
 
     context.user_data["qty"] = qty
-    await _show_product_detail(query, product, qty, stock)
+    await _show_product_detail(query, product, qty, stock, lang)
     return JUMLAH
 
 
@@ -483,38 +483,40 @@ async def receive_manual_jumlah(update: Update, context: ContextTypes.DEFAULT_TY
     if message is None or message.text is None:
         return JUMLAH
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     text = message.text.strip()
     try:
         qty = int(text)
     except ValueError:
-        await message.reply_text("Please enter a valid number.")
+        await message.reply_text(t("admin_price_number", lang))
         return JUMLAH
 
     if qty < 1:
-        await message.reply_text("Minimum 1 account.")
+        await message.reply_text(t("admin_price_positive", lang))
         return JUMLAH
 
     product = context.user_data.get("product")
     if not product:
-        await message.reply_text("Session expired. /beli to start again.")
+        await message.reply_text(t("session_expired", lang))
         return ConversationHandler.END
 
     stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
     if stock is not None and qty > stock:
         await message.reply_text(
-            f"Insufficient stock. Available: *{stock}* accounts.\n"
-            f"Type another quantity or /cancel to abort.",
+            t("insufficient_stock", lang, stock=stock) + "\n" + t("type_another_or_cancel", lang),
             parse_mode=ParseMode.MARKDOWN,
         )
         return JUMLAH
 
     user = update.effective_user
     if user is None:
-        await message.reply_text("Failed to process.")
+        await message.reply_text(t("admin_try_again", lang))
         return ConversationHandler.END
 
     await message.reply_text(
-        f"⏳ Creating order for *{escape_md(product['name'])}* x{qty}...",
+        t("creating_order_for", lang, name=escape_md(product['name']), qty=qty),
         parse_mode=ParseMode.MARKDOWN,
     )
     order_id, sent_msg = await _create_order_and_pay(context, user, product, qty, message=message)
@@ -522,25 +524,27 @@ async def receive_manual_jumlah(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def _show_confirm(query, context, product, qty):
+    user_id = query.from_user.id if query.from_user else 0
+    lang = get_lang(context, user_id)
     total = product["price"] * qty
 
     text = (
-        f"*✅ Order Confirmation*\n"
+        f"*{t('order_confirmation', lang)}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 Product: *{escape_md(product['name'])}*\n"
-        f"🔢 Quantity: *{qty}* accounts\n"
-        f"💰 Price: Rp {format_rupiah(product['price'])}/account\n"
-        f"💵 Total: *Rp {format_rupiah(total)}*\n"
+        f"📦 {t('product_label', lang)}: *{escape_md(product['name'])}*\n"
+        f"🔢 {t('quantity_label', lang)}: *{qty}* {t('accounts_label', lang)}\n"
+        f"💰 {t('price', lang)}: Rp {format_rupiah(product['price'])}/{t('accounts', lang)}\n"
+        f"💵 {t('total', lang)}: *Rp {format_rupiah(total)}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Proceed to payment?"
+        f"{t('proceed_payment', lang)}"
     )
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Confirm & Pay", callback_data="confirm:yes"),
-            InlineKeyboardButton("⬅️ Back", callback_data="confirm:no"),
+            InlineKeyboardButton(t("confirm_pay", lang), callback_data="confirm:yes"),
+            InlineKeyboardButton(t("btn_back", lang), callback_data="confirm:no"),
         ],
-        [InlineKeyboardButton("❌ Cancel", callback_data="buy:cancel")],
+        [InlineKeyboardButton(t("cancel", lang), callback_data="buy:cancel")],
     ])
 
     await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -553,6 +557,9 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await query.answer()
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     choice = query.data.split(":")[1] if query.data else ""
 
     if choice == "no":
@@ -560,11 +567,10 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         qty = context.user_data.get("qty", 1)
         if product:
             stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
-            await _show_product_detail(query, product, qty, stock)
+            await _show_product_detail(query, product, qty, stock, lang)
             return JUMLAH
         context.user_data.clear()
-        uid = (update.effective_user.id or 0) if update.effective_user else 0
-        await query.edit_message_text("Cancelled. ❌", reply_markup=get_main_menu_keyboard(uid))
+        await query.edit_message_text(t("cancelled", lang), reply_markup=get_main_menu_keyboard(user_id, lang))
         return ConversationHandler.END
 
     product = context.user_data.get("product")
@@ -572,26 +578,25 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if not product:
         context.user_data.clear()
-        uid = (update.effective_user.id or 0) if update.effective_user else 0
-        await query.edit_message_text("Session expired. Please start again:", reply_markup=get_main_menu_keyboard(uid))
+        await query.edit_message_text(t("session_expired", lang), reply_markup=get_main_menu_keyboard(user_id, lang))
         return ConversationHandler.END
 
     user = update.effective_user
     if user is None:
         context.user_data.clear()
-        await query.edit_message_text("Failed to create order.")
+        await query.edit_message_text(t("admin_try_again", lang))
         return ConversationHandler.END
 
     stock = db.get_stock_count(product["id"]) if product["stock_type"] == "limited" else None
     if stock is not None and quantity > stock:
         await query.edit_message_text(
-            f"Insufficient stock. Available: *{stock}* accounts.",
+            t("insufficient_stock", lang, stock=stock),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=get_main_menu_keyboard(user.id),
+            reply_markup=get_main_menu_keyboard(user_id, lang),
         )
         return ConversationHandler.END
 
-    await query.edit_message_text("⏳ Creating order & QRIS...", parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(t("creating_order", lang), parse_mode=ParseMode.MARKDOWN)
     order_id, sent_msg = await _create_order_and_pay(context, user, product, quantity, query=query)
     return ConversationHandler.END
 
@@ -600,22 +605,24 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data.clear()
     message = update.message
     if message is not None:
-        uid = (update.effective_user.id or 0) if update.effective_user else 0
-        await message.reply_text("Cancelled. ❌", reply_markup=get_main_menu_keyboard(uid))
+        user_id = update.effective_user.id if update.effective_user else 0
+        lang = get_lang(context, user_id)
+        await message.reply_text(t("cancelled", lang), reply_markup=get_main_menu_keyboard(user_id, lang))
     return ConversationHandler.END
 
 
 async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         user_id = update.effective_user.id
+        lang = get_lang(context, user_id)
         orders = db.get_user_orders(user_id)
 
         if not orders:
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🛍️ Product List", callback_data="menu:produk")],
-                [btn_home()],
+                [InlineKeyboardButton(t("btn_product_list", lang), callback_data="menu:produk")],
+                [btn_home(lang)],
             ])
-            await update.message.reply_text("No orders yet. 🛒", reply_markup=keyboard)
+            await update.message.reply_text(t("no_orders", lang), reply_markup=keyboard)
             return
 
         _STATUS_EMOJI = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦", "waiting_payment": "⏳"}
@@ -623,7 +630,7 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         lines = []
 
         for o in recent:
-            order_id = o.get("id", "")
+            oid = o.get("id", "")
             qty = o.get("quantity", 0)
             total = o.get("total", 0)
             status = o.get("status", "pending")
@@ -642,21 +649,21 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 created_wib = "-"
 
             lines.append(
-                f"📋 {order_id}\n"
-                f"📦 Product: {product_name}\n"
-                f"🔢 Quantity: {qty} accounts\n"
+                f"📋 {oid}\n"
+                f"📦 {t('product_label', lang)}: {product_name}\n"
+                f"🔢 {t('quantity_label', lang)}: {qty} {t('accounts_label', lang)}\n"
                 f"💰 Total: Rp {format_rupiah(total)}\n"
-                f"Status: {emoji} {status}\n"
-                f"📅 Date: {created_wib}\n"
+                f"{t('status_label_header', lang)}: {emoji} {status}\n"
+                f"📅 {t('date_label', lang)}: {created_wib}\n"
             )
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔄 Buy Again", callback_data="menu:produk")],
-            [btn_home()],
+            [InlineKeyboardButton(t("buy_again", lang), callback_data="menu:produk")],
+            [btn_home(lang)],
         ])
 
         await update.message.reply_text(
-            "*📋 Order History*\n\n" + "\n".join(lines),
+            f"*{t('order_history', lang)}*\n\n" + "\n".join(lines),
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=keyboard,
         )
@@ -664,6 +671,6 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception as e:
         logger.exception("cmd_myorders error: %s", e)
         try:
-            await update.effective_message.reply_text("Sorry, something went wrong. Please try again.")
+            await update.effective_message.reply_text(t("admin_try_again", lang))
         except Exception:
             pass

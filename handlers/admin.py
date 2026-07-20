@@ -1,18 +1,4 @@
-"""Admin command handlers.
-
-- /addproduct - Add new product
-- /editproduct - Edit product
-- /delproduct - Delete product
-- /products - View all products
-- /addstock - Upload .txt file or paste stock
-- /stockinfo - View stock info
-- /orders - View recent orders + change status
-- /broadcast - Send message to all users
-- /setprice - Change price per product
-- /addadmin - Add admin
-- /removeadmin - Remove admin
-- /adminlist - View admin list
-"""
+"""Admin command handlers — all text translated per user language."""
 
 import logging
 import re
@@ -29,7 +15,7 @@ from telegram.ext import (
 
 import config
 import db
-from handlers.start import btn_home, escape_md
+from handlers.start import btn_home, escape_md, get_lang, t, format_rupiah
 
 logger = logging.getLogger(__name__)
 
@@ -48,21 +34,17 @@ def _is_admin(update: Update) -> bool:
     return user is not None and user.id in config.ADMIN_IDS
 
 
-async def _deny_non_admin(update: Update) -> None:
+async def _deny_non_admin(update: Update, lang="en") -> None:
     message = update.effective_message
     if message is None:
         return
-    await message.reply_text("This command is for admins only.")
+    await message.reply_text(t("admin_access_denied", lang))
 
 
-def format_rupiah(n: int) -> str:
-    return f"{n:,}".replace(",", ".")
-
-
-def _admin_back_keyboard():
+def _admin_back_keyboard(lang="en"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
-        [btn_home()],
+        [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
+        [btn_home(lang)],
     ])
 
 
@@ -91,15 +73,18 @@ async def handle_quick_addproduct(update: Update, context: ContextTypes.DEFAULT_
     if not name or price <= 0:
         return False
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     product_id = db.add_product(name=name, description=description, price=price)
     await message.reply_text(
-        f"*✅ Product added!*\n\n"
-        f"🆔 ID: `{product_id}`\n"
-        f"📦 Name: *{name}*\n"
-        f"💰 Price: *Rp {format_rupiah(price)}*\n"
-        f"📝 Description: {description or '-'}",
+        f"*{t('admin_product_added', lang)}*\n\n"
+        f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
+        f"📦 {t('admin_name', lang)}: *{name}*\n"
+        f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
+        f"📝 {t('admin_description', lang)}: {description or '-'}",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
     return True
 
@@ -135,7 +120,9 @@ def register(app: Application) -> None:
 
 async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """If in addstock mode, try parsing as email:password. Otherwise try quick-add product."""
-    # Handle interactive admin states
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     admin_state = context.user_data.get("admin_state")
 
     if admin_state == "addproduct_name":
@@ -144,14 +131,14 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
             return
         name = message.text.strip()
         if not name:
-            await message.reply_text("Name cannot be empty. Send product name:")
+            await message.reply_text(t("admin_name_empty", lang))
             return
         context.user_data["admin_state"] = "addproduct_price"
         context.user_data["addproduct_name"] = name
         await message.reply_text(
-            f"📦 Product name: *{name}*\n\n📝 Send the *price* (number only).\nExample: `15000`",
+            f"📦 {t('admin_product_name', lang)}: *{name}*\n\n{t('admin_send_price', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -162,17 +149,17 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         try:
             price = int(message.text.strip().replace(".", "").replace(",", ""))
         except ValueError:
-            await message.reply_text("Price must be a number. Send again:")
+            await message.reply_text(t("admin_price_number", lang))
             return
         if price <= 0:
-            await message.reply_text("Price must be > 0. Send again:")
+            await message.reply_text(t("admin_price_positive", lang))
             return
         context.user_data["admin_state"] = "addproduct_desc"
         context.user_data["addproduct_price"] = price
         await message.reply_text(
-            f"💰 Price: *Rp {format_rupiah(price)}*\n\n📝 Send the *description* (or send `-` to skip).",
+            f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n\n{t('admin_send_desc', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -188,18 +175,18 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         context.user_data.pop("admin_state", None)
 
         if not name or price <= 0:
-            await message.reply_text("Something went wrong. Start again.", reply_markup=_admin_back_keyboard())
+            await message.reply_text(t("admin_something_wrong", lang), reply_markup=_admin_back_keyboard(lang))
             return
 
         product_id = db.add_product(name=name, description=desc, price=price)
         await message.reply_text(
-            f"*✅ Product added!*\n\n"
-            f"🆔 ID: `{product_id}`\n"
-            f"📦 Name: *{escape_md(name)}*\n"
-            f"💰 Price: *Rp {format_rupiah(price)}*\n"
-            f"📝 Description: {desc or '-'}",
+            f"*{t('admin_product_added', lang)}*\n\n"
+            f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
+            f"📦 {t('admin_name', lang)}: *{escape_md(name)}*\n"
+            f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
+            f"📝 {t('admin_description', lang)}: {desc or '-'}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -210,10 +197,10 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         try:
             new_price = int(message.text.strip().replace(".", "").replace(",", ""))
         except ValueError:
-            await message.reply_text("Price must be a number. Send again:")
+            await message.reply_text(t("admin_price_number", lang))
             return
         if new_price <= 0:
-            await message.reply_text("Price must be > 0. Send again:")
+            await message.reply_text(t("admin_price_positive", lang))
             return
         product_id = context.user_data.pop("setprice_product_id", None)
         context.user_data.pop("admin_state", None)
@@ -222,43 +209,43 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
             product = db.get_product(product_id)
             product_name = escape_md(product["name"]) if product else "Unknown"
             await message.reply_text(
-                f"📦 Product: *{product_name}*\n"
-                f"💰 New price: *Rp {format_rupiah(new_price)}*",
+                f"📦 {t('admin_name', lang)}: *{product_name}*\n"
+                f"💰 {t('admin_new_price', lang)}: *Rp {format_rupiah(new_price)}*",
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=_admin_back_keyboard(),
+                reply_markup=_admin_back_keyboard(lang),
             )
         else:
-            await message.reply_text("Something went wrong.", reply_markup=_admin_back_keyboard())
+            await message.reply_text(t("admin_something_wrong", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     if admin_state == "broadcast_msg":
         message = update.message
         if message is None or not message.text:
             return
-        text = message.text.strip()
+        broadcast_text = message.text.strip()
         context.user_data.pop("admin_state", None)
 
         try:
             user_ids = db.get_all_user_ids()
         except Exception:
-            await message.reply_text("Failed to get users.", reply_markup=_admin_back_keyboard())
+            await message.reply_text(t("admin_try_again", lang), reply_markup=_admin_back_keyboard(lang))
             return
 
         success = 0
         failed = 0
         for uid in user_ids:
             try:
-                await context.bot.send_message(chat_id=uid, text=text, parse_mode=ParseMode.MARKDOWN)
+                await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
                 success += 1
             except Exception:
                 failed += 1
 
         await message.reply_text(
-            f"*✅ Broadcast complete!*\n\n"
-            f"📤 Sent: *{success}* users\n"
-            f"❌ Failed: *{failed}* users",
+            f"*{t('admin_broadcast_done', lang)}*\n\n"
+            f"📤 {t('admin_sent', lang)}: *{success}* {t('users', lang)}\n"
+            f"❌ {t('admin_failed', lang)}: *{failed}* {t('users', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -269,23 +256,23 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         try:
             new_admin_id = int(message.text.strip())
         except ValueError:
-            await message.reply_text("ID must be a number. Send again:")
+            await message.reply_text(t("admin_id_number", lang))
             return
         context.user_data.pop("admin_state", None)
         if new_admin_id in config.ADMIN_IDS:
             await message.reply_text(
-                f"ID `{new_admin_id}` is already an admin.",
+                t("admin_already_admin", lang, id=new_admin_id),
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=_admin_back_keyboard(),
+                reply_markup=_admin_back_keyboard(lang),
             )
             return
         config.ADMIN_IDS.add(new_admin_id)
         await message.reply_text(
-            f"*✅ Admin added!*\n\n"
-            f"🆔 ID: `{new_admin_id}`\n"
-            f"👥 Total admins: *{len(config.ADMIN_IDS)}*",
+            f"*{t('admin_added', lang)}*\n\n"
+            f"🆔 {t('admin_id', lang)}: `{new_admin_id}`\n"
+            f"👥 {t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -308,29 +295,27 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
 
         if count > 0:
             await message.reply_text(
-                f"*✅ Stock added to {product_name}!*\n\n"
-                f"📥 Added: *{count}* accounts\n"
-                f"📦 Product stock: *{stock}* accounts\n\n"
-                f"💡 Send more stock or click Back below.",
+                f"*{t('admin_stock_added', lang, name=product_name)}*\n\n"
+                f"📥 {t('admin_added_count', lang)}: *{count}* {t('accounts', lang)}\n"
+                f"📦 {t('admin_product_stock', lang)}: *{stock}* {t('accounts', lang)}\n\n"
+                f"{t('admin_send_more', lang)}",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"📥 Add More to {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
-                    [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
-                    [btn_home()],
+                    [InlineKeyboardButton(f"📥 {t('admin_add_more', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
+                    [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
+                    [btn_home(lang)],
                 ]),
             )
         else:
             await message.reply_text(
-                f"*⚠️ No stock added to {product_name}*\n\n"
-                f"Please check format:\n"
-                f"`email:password`\n"
-                f"one account per line.\n\n"
-                f"Current product stock: *{stock}* accounts",
+                f"*{t('admin_stock_not_added', lang, name=product_name)}*\n\n"
+                f"{t('admin_check_format', lang)}\n\n"
+                f"{t('admin_current_stock', lang)}: *{stock}* {t('accounts', lang)}",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"🔄 Try Again — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
-                    [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
-                    [btn_home()],
+                    [InlineKeyboardButton(f"🔄 {t('admin_try_again', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
+                    [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
+                    [btn_home(lang)],
                 ]),
             )
         return
@@ -347,36 +332,33 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _deny_non_admin(update)
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     raw = update.message.text.replace("/addproduct", "").strip() if update.message.text else ""
     if not raw or "|" not in raw:
         await update.message.reply_text(
-            "*➕ ADD PRODUCT*\n\n"
-            "Format: `/addproduct ProductName|Price|Description`\n\n"
-            "*Examples:*\n"
-            "`/addproduct Leonardo|10000|Leonardo AI Account`\n"
-            "`/addproduct GSuite|100000|GSuite 30 days`",
+            f"*{t('admin_add_product', lang)}*\n\n"
+            f"{t('cmd_addproduct_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     parts = [p.strip() for p in raw.split("|")]
     name = parts[0]
     if not name:
-        await update.message.reply_text(
-            "Product name cannot be empty.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text(t("admin_name_empty", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     try:
         price = int(parts[1])
     except (IndexError, ValueError):
         await update.message.reply_text(
-            "Price must be a number.\n\n"
-            "Format: `/addproduct ProductName|Price|Description`",
+            f"{t('admin_price_number', lang)}\n\n"
+            f"Format: `/addproduct ProductName|Price|Description`",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -384,13 +366,13 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     product_id = db.add_product(name=name, description=description, price=price)
     await update.message.reply_text(
-        f"*✅ Product added!*\n\n"
-        f"🆔 ID: `{product_id}`\n"
-        f"📦 Name: *{name}*\n"
-        f"💰 Price: *Rp {format_rupiah(price)}*\n"
-        f"📝 Description: {description or '-'}",
+        f"*{t('admin_product_added', lang)}*\n\n"
+        f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
+        f"📦 {t('admin_name', lang)}: *{name}*\n"
+        f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
+        f"📝 {t('admin_description', lang)}: {description or '-'}",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -399,36 +381,30 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await _deny_non_admin(update)
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     args = context.args or []
     if len(args) < 2:
         await update.message.reply_text(
-            "*✏️ EDIT PRODUCT*\n\n"
-            "Use: `/editproduct <id> <field>=<value>`\n\n"
-            "*Fields:* name, price, description, stock_type, stock_count, duration, is_active\n\n"
-            "*Examples:*\n"
-            "`/editproduct 1 price=15000`\n"
-            "`/editproduct 1 name=Leonardo Pro`\n"
-            "`/editproduct 1 is_active=0` (deactivate)",
+            t('cmd_editproduct_usage', lang),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     try:
         product_id = int(args[0])
     except ValueError:
-        await update.message.reply_text(
-            "ID must be a number.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text(t("admin_id_number", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     product = db.get_product(product_id)
     if not product:
         await update.message.reply_text(
-            f"Product ID `{product_id}` not found.",
+            t("admin_not_found", lang, id=product_id),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -448,23 +424,21 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 kwargs[k] = v
 
     if not kwargs:
-        await update.message.reply_text(
-            "No changes made. Use field=value.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text(t("admin_no_changes", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     db.update_product(product_id, **kwargs)
     updated = db.get_product(product_id)
+    active_text = t("admin_active", lang) if updated['is_active'] else t("admin_inactive", lang)
     await update.message.reply_text(
-        f"*✅ Product updated!*\n\n"
-        f"🆔 ID: `{product_id}`\n"
-        f"📦 Name: *{updated['name']}*\n"
-        f"💰 Price: *Rp {format_rupiah(updated['price'])}*\n"
-        f"📦 Stock: {updated['stock_type']} ({updated['stock_count']})\n"
-        f"{'✅ Active' if updated['is_active'] else '❌ Inactive'}",
+        f"*{t('admin_product_updated', lang)}*\n\n"
+        f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
+        f"📦 {t('admin_name', lang)}: *{updated['name']}*\n"
+        f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(updated['price'])}*\n"
+        f"📦 {t('admin_stock', lang)}: {updated['stock_type']} ({updated['stock_count']})\n"
+        f"{active_text}",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -473,39 +447,39 @@ async def cmd_delproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _deny_non_admin(update)
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     args = context.args or []
     if not args:
         await update.message.reply_text(
-            "Use: `/delproduct <id>`",
+            t('cmd_delproduct_usage', lang),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     try:
         product_id = int(args[0])
     except ValueError:
-        await update.message.reply_text(
-            "ID must be a number.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text(t("admin_id_number", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     product = db.get_product(product_id)
     if not product:
         await update.message.reply_text(
-            f"Product ID `{product_id}` not found.",
+            t("admin_not_found", lang, id=product_id),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     db.delete_product(product_id)
     await update.message.reply_text(
-        f"*🗑️ Product deleted!*\n\n"
-        f"📦 Name: *{escape_md(product['name'])}*",
+        f"*{t('admin_product_deleted', lang)}*\n\n"
+        f"📦 {t('admin_name', lang)}: *{escape_md(product['name'])}*",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -514,29 +488,32 @@ async def cmd_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _deny_non_admin(update)
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     products = db.get_all_products()
     if not products:
         await update.message.reply_text(
-            "*📦 PRODUCT LIST*\n\nNo products yet.",
+            f"*{t('admin_product_list', lang)}*\n\n{t('no_products', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
-    lines = ["*📦 PRODUCT LIST*\n"]
+    lines = [f"*{t('admin_product_list', lang)}*\n"]
     for p in products:
-        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
+        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
         status = "✅" if p["is_active"] else "❌"
         lines.append(
             f"{status} #{p['id']} | *{escape_md(p['name'])}*\n"
-            f"   💰 Price: Rp {format_rupiah(p['price'])}\n"
-            f"   📦 Stock: {stock}\n"
+            f"   💰 {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
+            f"   📦 {t('admin_stock', lang)}: {stock}\n"
         )
 
     await update.message.reply_text(
         "\n".join(lines),
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -553,12 +530,15 @@ async def cmd_addstock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if message is None:
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     products = db.get_active_products()
     if not products:
         await message.reply_text(
-            "*📥 ADD STOCK*\n\nNo active products yet. Add a product first.",
+            t("admin_no_active_products", lang),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -566,13 +546,13 @@ async def cmd_addstock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     for p in products:
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
         buttons.append([InlineKeyboardButton(
-            f"📦 {p['name']} (Stock: {stock})",
+            f"📦 {p['name']} ({t('admin_stock', lang)}: {stock})",
             callback_data=f"admin:astk:{p['id']}",
         )])
-    buttons.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+    buttons.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
     await message.reply_text(
-        "*📥 ADD STOCK*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nSelect product to add stock to:",
+        f"*{t('admin_add_stock', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n{t('admin_select_stock_product', lang)}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -587,15 +567,15 @@ async def cmd_addstock_txt(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if message is None:
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     await message.reply_text(
-        "*📥 ADD STOCK*\n\n"
-        "Send a .txt file with format per line:\n"
-        "`email:password`\n\n"
-        "Or paste directly in chat:\n"
-        "`email1:password1`\n"
-        "`email2:password2`",
+        f"*{t('admin_add_stock', lang)}*\n\n"
+        f"{t('admin_method1', lang)}\n\n"
+        f"{t('admin_method2', lang)}",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -607,12 +587,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if message is None or message.document is None:
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     doc = message.document
     if doc.mime_type and "text" not in doc.mime_type and not doc.file_name.endswith(".txt"):
-        await message.reply_text(
-            "Only .txt files are accepted.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await message.reply_text(t("admin_only_txt", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     try:
@@ -622,10 +602,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         lines = text.splitlines()
     except Exception as e:
         logger.exception("Failed to download file: %s", e)
-        await message.reply_text(
-            "Failed to read file. Please try again.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await message.reply_text(t("admin_failed_read", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     addstock_pid = context.user_data.get("addstock_product_id")
@@ -640,19 +617,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if count > 0:
         await message.reply_text(
-            f"*✅ Stock added successfully!*\n\n"
-            f"📦 Product: *{product_label}*\n"
-            f"📥 Added: *{count}* accounts\n"
-            f"📦 Stock: *{stock}* accounts",
+            f"*{t('admin_stock_file_added', lang)}*\n\n"
+            f"📦 {t('admin_name', lang)}: *{product_label}*\n"
+            f"📥 {t('admin_added_count', lang)}: *{count}* {t('accounts', lang)}\n"
+            f"📦 {t('admin_stock', lang)}: *{stock}* {t('accounts', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
     else:
         await message.reply_text(
-            f"*⚠️ No stock added*\n\n"
-            f"Check format: `email:password` per line.",
+            t("admin_stock_file_none", lang),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
 
 
@@ -661,15 +637,18 @@ async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _deny_non_admin(update)
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     total_stock = db.get_stock_count()
     pending = len(db.get_pending_qris_orders())
     products = db.get_active_products()
 
     text = (
-        f"*📊 STOCK INFO*\n"
+        f"*{t('admin_stock_info', lang)}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 Total Ready Stock: *{total_stock}* accounts\n"
-        f"⏳ Pending Orders: *{pending}*\n"
+        f"📦 {t('admin_total_ready', lang)}: *{total_stock}* {t('accounts', lang)}\n"
+        f"⏳ {t('admin_pending_orders', lang)}: *{pending}*\n"
     )
     for p in products:
         p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
@@ -678,7 +657,7 @@ async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(
         text,
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -691,50 +670,50 @@ async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if message is None:
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     status_filter = context.args[0] if context.args else None
 
     try:
         orders = db.get_all_orders(limit=20, status=status_filter)
     except Exception as exc:
         logger.exception("Failed get_all_orders: %s", exc)
-        await message.reply_text(
-            "Sorry, something went wrong. Please try again.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await message.reply_text(t("admin_try_again", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     if not orders:
         await message.reply_text(
-            "*📋 RECENT ORDERS*\n\nNo orders yet.",
+            f"*{t('admin_recent_orders', lang)}*\n\n{t('no_products', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
-    lines = [f"*📋 RECENT ORDERS* ({len(orders)})\n"]
+    lines = [f"*{t('admin_recent_orders', lang)}* ({len(orders)})\n"]
 
     for o in orders:
         username = o.get("username") or "no_user"
         status = o.get("status", "pending")
         emoji = _STATUS_EMOJI.get(status, "⏳")
-        order_id = o["id"]
+        oid = o["id"]
         product = db.get_product(o.get("product_id", 1))
         product_name = escape_md(product["name"]) if product else "N/A"
 
         lines.append(
-            f"#{order_id} | @{username}\n"
+            f"#{oid} | @{username}\n"
             f"📦 {product_name}\n"
             f"🔢 {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
-            f"Status: {emoji} {status}\n"
+            f"{t('status_label_header', lang)}: {emoji} {status}\n"
         )
 
     filter_buttons = [
-        InlineKeyboardButton("📋 All", callback_data="admin:orders"),
-        InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
-        InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
+        InlineKeyboardButton(t("btn_all", lang), callback_data="admin:orders"),
+        InlineKeyboardButton(t("btn_pending", lang), callback_data="admin:orders_pending"),
+        InlineKeyboardButton(t("btn_paid", lang), callback_data="admin:orders_paid"),
     ]
     keyboard_rows = [filter_buttons]
-    keyboard_rows.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+    keyboard_rows.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
     await message.reply_text(
         "\n".join(lines),
@@ -748,51 +727,52 @@ async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _deny_non_admin(update)
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     args = context.args or []
     if len(args) < 2:
         await update.message.reply_text(
-            "*💰 CHANGE PRICE*\n\n"
-            "Use: `/setprice <product_id> <new_price>`\n\n"
-            "*Example:*\n"
-            "`/setprice 1 15000`",
+            f"*{t('admin_change_price', lang)}*\n\n"
+            f"{t('cmd_setprice_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     try:
         product_id = int(args[0])
     except ValueError:
-        await update.message.reply_text("Product ID must be a number.", reply_markup=_admin_back_keyboard())
+        await update.message.reply_text(t("admin_id_number", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     product = db.get_product(product_id)
     if not product:
         await update.message.reply_text(
-            f"Product ID `{product_id}` not found.",
+            t("admin_not_found", lang, id=product_id),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     try:
         new_price = int(args[1].replace(".", "").replace(",", ""))
     except ValueError:
-        await update.message.reply_text("Price must be a number.", reply_markup=_admin_back_keyboard())
+        await update.message.reply_text(t("admin_price_must_be_number", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     if new_price <= 0:
-        await update.message.reply_text("Price must be greater than 0.", reply_markup=_admin_back_keyboard())
+        await update.message.reply_text(t("admin_price_gt_zero", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     db.update_product(product_id, price=new_price)
     updated = db.get_product(product_id)
     await update.message.reply_text(
-        f"*✅ Price updated!*\n\n"
-        f"📦 Product: *{updated['name']}*\n"
-        f"💰 New price: *Rp {new_price:,}/account*",
+        f"*{t('admin_price_updated', lang)}*\n\n"
+        f"📦 {t('admin_name', lang)}: *{updated['name']}*\n"
+        f"💰 {t('admin_new_price', lang)}: *Rp {new_price:,}/{t('accounts', lang)}*",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -805,15 +785,16 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if message is None:
         return
 
-    text = " ".join(context.args or []).strip()
-    if not text:
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
+    broadcast_text = " ".join(context.args or []).strip()
+    if not broadcast_text:
         await message.reply_text(
-            "*📣 BROADCAST*\n\n"
-            "Send a message to all users.\n\n"
-            "Use: `/broadcast <message>`\n\n"
-            "*Example:* `/broadcast Weekend promo 20% off!`",
+            f"*{t('admin_broadcast', lang)}*\n\n"
+            f"{t('cmd_broadcast_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
@@ -821,27 +802,24 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         user_ids = db.get_all_user_ids()
     except Exception as exc:
         logger.exception("Failed get_all_user_ids: %s", exc)
-        await message.reply_text(
-            "Sorry, something went wrong. Please try again.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await message.reply_text(t("admin_try_again", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     success = 0
     failed = 0
     for uid in user_ids:
         try:
-            await context.bot.send_message(chat_id=uid, text=text, parse_mode=ParseMode.MARKDOWN)
+            await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
             success += 1
         except Exception:
             failed += 1
 
     await message.reply_text(
-        f"*✅ Broadcast complete!*\n\n"
-        f"📤 Sent: *{success}* users\n"
-        f"❌ Failed: *{failed}* users",
+        f"*{t('admin_broadcast_done', lang)}*\n\n"
+        f"📤 {t('admin_sent', lang)}: *{success}* {t('users', lang)}\n"
+        f"❌ {t('admin_failed', lang)}: *{failed}* {t('users', lang)}",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -850,39 +828,44 @@ async def cmd_addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _deny_non_admin(update)
         return
 
+    message = update.message
+    if message is None:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     args = context.args or []
     if not args:
-        await update.message.reply_text(
-            "*👤 ADD ADMIN*\n\n"
-            "Use: `/addadmin <telegram_user_id>`\n\n"
-            "*Example:* `/addadmin 123456789`\n\n"
-            "💡 To find ID: Forward a message to @userinfobot",
+        await message.reply_text(
+            f"*{t('admin_add_admin', lang)}*\n\n"
+            f"{t('cmd_addadmin_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     try:
         new_admin_id = int(args[0])
     except ValueError:
-        await update.message.reply_text("ID must be a number.", reply_markup=_admin_back_keyboard())
+        await message.reply_text(t("admin_id_number", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     if new_admin_id in config.ADMIN_IDS:
         await update.message.reply_text(
-            f"ID `{new_admin_id}` is already an admin.",
+            t("admin_already_admin", lang, id=new_admin_id),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     config.ADMIN_IDS.add(new_admin_id)
     await update.message.reply_text(
-        f"*✅ Admin added!*\n\n"
-        f"🆔 ID: `{new_admin_id}`\n"
-        f"👥 Total admins: *{len(config.ADMIN_IDS)}*",
+        f"*{t('admin_added', lang)}*\n\n"
+        f"🆔 {t('admin_id', lang)}: `{new_admin_id}`\n"
+        f"👥 {t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -891,45 +874,48 @@ async def cmd_removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await _deny_non_admin(update)
         return
 
+    message = update.message
+    if message is None:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
     args = context.args or []
     if not args:
-        await update.message.reply_text(
-            "*👤 REMOVE ADMIN*\n\n"
-            "Use: `/removeadmin <telegram_user_id>`\n\n"
-            "⚠️ Cannot remove the main admin.",
+        await message.reply_text(
+            f"*{t('admin_remove_admin', lang)}*\n\n"
+            f"{t('cmd_removeadmin_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     try:
         remove_id = int(args[0])
     except ValueError:
-        await update.message.reply_text("ID must be a number.", reply_markup=_admin_back_keyboard())
+        await message.reply_text(t("admin_id_number", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     if remove_id == config.ADMIN_USER_ID:
-        await update.message.reply_text(
-            "Cannot remove the main admin.",
-            reply_markup=_admin_back_keyboard(),
-        )
+        await update.message.reply_text(t("admin_cannot_remove", lang), reply_markup=_admin_back_keyboard(lang))
         return
 
     if remove_id not in config.ADMIN_IDS:
         await update.message.reply_text(
-            f"ID `{remove_id}` is not an admin.",
+            t("admin_id_not_admin", lang, id=remove_id),
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(),
+            reply_markup=_admin_back_keyboard(lang),
         )
         return
 
     config.ADMIN_IDS.discard(remove_id)
     await update.message.reply_text(
-        f"*✅ Admin removed!*\n\n"
-        f"🆔 ID: `{remove_id}`\n"
-        f"👥 Total admins: *{len(config.ADMIN_IDS)}*",
+        f"*{t('admin_removed', lang)}*\n\n"
+        f"🆔 {t('admin_id', lang)}: `{remove_id}`\n"
+        f"👥 {t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )
 
 
@@ -938,15 +924,18 @@ async def cmd_adminlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _deny_non_admin(update)
         return
 
-    lines = ["*👥 ADMIN LIST*\n"]
-    for i, admin_id in enumerate(sorted(config.ADMIN_IDS), 1):
-        is_main = " ⭐" if admin_id == config.ADMIN_USER_ID else ""
-        lines.append(f"{i}. `{admin_id}`{is_main}")
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
 
-    lines.append(f"\n📊 Total: *{len(config.ADMIN_IDS)}* admins")
+    lines = [f"*{t('admin_list_title', lang)}*\n"]
+    for i, aid in enumerate(sorted(config.ADMIN_IDS), 1):
+        is_main = " ⭐" if aid == config.ADMIN_USER_ID else ""
+        lines.append(f"{i}. `{aid}`{is_main}")
+
+    lines.append(f"\n📊 {t('admin_total', lang)}: *{len(config.ADMIN_IDS)}* {t('admins', lang)}")
 
     await update.message.reply_text(
         "\n".join(lines),
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_admin_back_keyboard(),
+        reply_markup=_admin_back_keyboard(lang),
     )

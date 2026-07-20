@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS users (
   user_id INTEGER PRIMARY KEY,
   username TEXT,
   first_name TEXT,
+  lang TEXT DEFAULT 'en',
   last_seen TEXT DEFAULT (datetime('now'))
 );
 
@@ -122,6 +123,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         )
     except Exception:
         pass
+
+    cursor = conn.execute("PRAGMA table_info(users)")
+    cols = {row["name"] for row in cursor.fetchall()}
+    if "lang" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN lang TEXT DEFAULT 'en'")
 
     conn.commit()
 
@@ -403,12 +409,32 @@ def get_expired_pending_orders() -> list[dict]:
 
 def upsert_user(user_id: int, username: str | None, first_name: str | None) -> None:
     assert _conn is not None
+    existing = _conn.execute("SELECT lang FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    lang = existing["lang"] if existing and existing["lang"] else "en"
     _conn.execute(
-        """INSERT OR REPLACE INTO users (user_id, username, first_name, last_seen)
-        VALUES (?, ?, ?, datetime('now'))""",
-        (user_id, username, first_name),
+        """INSERT OR REPLACE INTO users (user_id, username, first_name, lang, last_seen)
+        VALUES (?, ?, ?, ?, datetime('now'))""",
+        (user_id, username, first_name, lang),
     )
     _conn.commit()
+
+
+def save_lang(user_id: int, lang: str) -> None:
+    assert _conn is not None
+    _conn.execute(
+        "INSERT INTO users (user_id, lang, last_seen) VALUES (?, ?, datetime('now')) "
+        "ON CONFLICT(user_id) DO UPDATE SET lang = excluded.lang, last_seen = excluded.last_seen",
+        (user_id, lang),
+    )
+    _conn.commit()
+
+
+def get_user_lang(user_id: int) -> str:
+    assert _conn is not None
+    row = _conn.execute("SELECT lang FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    if row and row["lang"]:
+        return row["lang"]
+    return "en"
 
 
 def get_all_user_ids() -> list[int]:

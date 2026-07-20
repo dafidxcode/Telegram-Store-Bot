@@ -27,8 +27,20 @@ def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
 
-def get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
-    return context.user_data.get("lang", DEFAULT_LANG)
+def get_lang(context: ContextTypes.DEFAULT_TYPE, user_id: int = 0) -> str:
+    cached = context.user_data.get("lang")
+    if cached:
+        return cached
+    if user_id:
+        db_lang = db.get_user_lang(user_id)
+        context.user_data["lang"] = db_lang
+        return db_lang
+    return DEFAULT_LANG
+
+
+def save_lang(context: ContextTypes.DEFAULT_TYPE, user_id: int, lang: str) -> None:
+    context.user_data["lang"] = lang
+    db.save_lang(user_id, lang)
 
 
 def t(key: str, lang: str, **fmt) -> str:
@@ -159,7 +171,6 @@ def build_products_text(lang: str = "en") -> str:
 
 
 def get_main_menu_keyboard(user_id: int = 0, lang: str = "en"):
-    other_lang = "ms" if lang == "en" else "en"
     lang_label = "🌐 Bahasa Melayu" if lang == "en" else "🌐 English"
 
     rows = [
@@ -177,36 +188,36 @@ def get_main_menu_keyboard(user_id: int = 0, lang: str = "en"):
     return InlineKeyboardMarkup(rows)
 
 
-def get_admin_panel_keyboard():
+def get_admin_panel_keyboard(lang="en"):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📦 View Products", callback_data="admin:products"),
-            InlineKeyboardButton("📊 Stock Info", callback_data="admin:stockinfo"),
+            InlineKeyboardButton(t("btn_view_products", lang), callback_data="admin:products"),
+            InlineKeyboardButton(t("btn_stock_info", lang), callback_data="admin:stockinfo"),
         ],
         [
-            InlineKeyboardButton("📋 View Orders", callback_data="admin:orders"),
-            InlineKeyboardButton("👥 Admin List", callback_data="admin:adminlist"),
+            InlineKeyboardButton(t("btn_view_orders", lang), callback_data="admin:orders"),
+            InlineKeyboardButton(t("btn_admin_list", lang), callback_data="admin:adminlist"),
         ],
         [
-            InlineKeyboardButton("➕ Add Product", callback_data="admin:addproduct"),
-            InlineKeyboardButton("📥 Add Stock", callback_data="admin:addstock"),
+            InlineKeyboardButton(t("btn_add_product", lang), callback_data="admin:addproduct"),
+            InlineKeyboardButton(t("btn_add_stock", lang), callback_data="admin:addstock"),
         ],
         [
-            InlineKeyboardButton("💰 Change Price", callback_data="admin:setprice"),
-            InlineKeyboardButton("📣 Broadcast", callback_data="admin:broadcast"),
+            InlineKeyboardButton(t("btn_change_price", lang), callback_data="admin:setprice"),
+            InlineKeyboardButton(t("btn_broadcast", lang), callback_data="admin:broadcast"),
         ],
         [
-            InlineKeyboardButton("👤 Add Admin", callback_data="admin:addadmin"),
-            InlineKeyboardButton("👤 Remove Admin", callback_data="admin:removeadmin"),
+            InlineKeyboardButton(t("btn_add_admin", lang), callback_data="admin:addadmin"),
+            InlineKeyboardButton(t("btn_remove_admin", lang), callback_data="admin:removeadmin"),
         ],
-        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+        [InlineKeyboardButton(t("btn_back_to_menu", lang), callback_data="menu:start")],
     ])
 
 
-def get_admin_back_keyboard():
+def get_admin_back_keyboard(lang="en"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")],
-        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:start")],
+        [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
+        [InlineKeyboardButton(t("btn_back_to_menu", lang), callback_data="menu:start")],
     ])
 
 
@@ -236,7 +247,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as exc:
         logger.exception("Failed upsert user %s: %s", user.id, exc)
 
-    lang = get_lang(context)
+    lang = get_lang(context, user.id)
     text = build_home_text(user, lang)
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu_keyboard(user.id, lang))
 
@@ -246,7 +257,8 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if message is None:
         return
 
-    lang = get_lang(context)
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
     text = build_products_text(lang)
     products = db.get_active_products()
     buttons = []
@@ -265,7 +277,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    lang = get_lang(context)
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
     keyboard = InlineKeyboardMarkup([global_nav_row(lang)])
 
     text = (
@@ -294,7 +307,8 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    lang = get_lang(context)
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
     products = db.get_active_products()
     total_stock = db.get_stock_count()
 
@@ -316,7 +330,7 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Language toggle handler
+# Language toggle handler — saves to DB
 # ---------------------------------------------------------------------------
 
 async def handle_lang_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -324,14 +338,16 @@ async def handle_lang_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if query is None:
         return
 
-    current = get_lang(context)
-    new_lang = "ms" if current == "en" else "en"
-    context.user_data["lang"] = new_lang
-
     user = update.effective_user
+    if user is None:
+        return
+
+    current = get_lang(context, user.id)
+    new_lang = "ms" if current == "en" else "en"
+    save_lang(context, user.id, new_lang)
+
     text = build_home_text(user, new_lang)
-    uid = (user.id or 0) if user else 0
-    await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(uid, new_lang))
+    await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(user.id, new_lang))
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +360,7 @@ async def handle_global_cancel(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     user_id = update.effective_user.id if update.effective_user else 0
-    lang = get_lang(context)
+    lang = get_lang(context, user_id)
     orders = db.get_user_orders(user_id)
     pending = [o for o in orders if o.get("status") == "pending"]
 
@@ -411,13 +427,13 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await query.answer()
     action = query.data.split(":")[1] if query.data else ""
-    lang = get_lang(context)
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
 
     if action == "start":
         user = update.effective_user
         text = build_home_text(user, lang)
-        uid = (user.id or 0) if user else 0
-        await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(uid, lang))
+        await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(user_id, lang))
 
     elif action == "produk":
         text = build_products_text(lang)
@@ -453,7 +469,6 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif action == "orders":
         keyboard = InlineKeyboardMarkup([global_nav_row(lang)])
         try:
-            user_id = update.effective_user.id
             orders = db.get_user_orders(user_id)
 
             if not orders:
@@ -471,24 +486,24 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             lines = [f"{t('order_history', lang)}\n"]
 
             for o in recent:
-                order_id = o.get("id", "")
+                oid = o.get("id", "")
                 qty = o.get("quantity", 0)
                 total = o.get("total", 0)
                 status = o.get("status", "pending")
                 emoji = _STATUS_EMOJI.get(status, "⏳")
                 product = db.get_product(o.get("product_id", 1))
                 product_name = escape_md(product["name"]) if product else "N/A"
-                lines.append(f"#{order_id} | {product_name} x{qty} | Rp {format_rupiah(total)} | {emoji} {status}")
+                lines.append(f"#{oid} | {product_name} x{qty} | Rp {format_rupiah(total)} | {emoji} {status}")
 
             await _safe_edit_or_send(query, "\n".join(lines), reply_markup=keyboard)
 
         except Exception as e:
             logger.exception("handle_menu orders error: %s", e)
-            await _safe_edit_or_send(query, "Sorry, something went wrong. Please try again.", reply_markup=keyboard)
+            await _safe_edit_or_send(query, t("admin_try_again", lang), reply_markup=keyboard)
 
     elif action == "admin":
-        if update.effective_user.id not in config.ADMIN_IDS:
-            await query.answer("Access denied.", show_alert=True)
+        if user_id not in config.ADMIN_IDS:
+            await query.answer(t("admin_access_denied", lang), show_alert=True)
             return
 
         total_stock = db.get_stock_count()
@@ -502,33 +517,24 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
             product_lines.append(f"  #{p['id']} {escape_md(p['name'])}: {p_stock} stock | Rp {format_rupiah(p['price'])}")
 
-        product_stock_text = "\n".join(product_lines) if product_lines else "  No products"
+        product_stock_text = "\n".join(product_lines) if product_lines else f"  {t('no_products_admin', lang)}"
 
         text = (
-            f"*⚙️ ADMIN PANEL*\n"
+            f"*{t('admin_panel', lang)}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"*📊 Dashboard*\n"
-            f"📦 Stock Ready : *{total_stock}* accounts\n"
-            f"✅ Sold : *{sold}* accounts\n"
-            f"⏳ Pending Orders : *{pending}*\n"
-            f"👥 Total Users : *{total_users}*\n"
-            f"🛍️ Total Products : *{len(products)}*\n"
+            f"*{t('dashboard', lang)}*\n"
+            f"📦 {t('stock_ready', lang)} : *{total_stock}* {t('accounts', lang)}\n"
+            f"✅ {t('sold', lang)} : *{sold}* {t('accounts', lang)}\n"
+            f"⏳ {t('pending_orders', lang)} : *{pending}*\n"
+            f"👥 {t('total_users', lang)} : *{total_users}*\n"
+            f"🛍️ {t('total_products', lang)} : *{len(products)}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"*📦 PER-PRODUCT STOCK*\n"
+            f"*{t('per_product_stock', lang)}*\n"
             f"{product_stock_text}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"Select admin menu below 👇"
+            f"{t('select_admin_menu', lang)}"
         )
-        await _safe_edit_or_send(query, text, reply_markup=get_admin_panel_keyboard())
-
-    elif action == "help":
-        other_lang = "ms" if lang == "en" else "en"
-        context.user_data["lang"] = other_lang
-        new_lang = other_lang
-        user = update.effective_user
-        text = build_home_text(user, new_lang)
-        uid = (user.id or 0) if user else 0
-        await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(uid, new_lang))
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_panel_keyboard(lang))
 
 
 # ---------------------------------------------------------------------------
@@ -542,8 +548,11 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await query.answer()
 
-    if update.effective_user.id not in config.ADMIN_IDS:
-        await query.answer("Access denied.", show_alert=True)
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
+    if user_id not in config.ADMIN_IDS:
+        await query.answer(t("admin_access_denied", lang), show_alert=True)
         return
 
     parts = query.data.split(":")
@@ -558,25 +567,25 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not products:
             await _safe_edit_or_send(
                 query,
-                "*📦 Product List*\n\nNo products yet.",
-                reply_markup=get_admin_back_keyboard(),
+                t("admin_no_products", lang),
+                reply_markup=get_admin_back_keyboard(lang),
             )
             return
 
-        lines = ["*📦 PRODUCT LIST*\n"]
+        lines = [f"*{t('admin_product_list', lang)}*\n"]
         for p in products:
-            stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "Unlimited"
+            stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
             status = "✅" if p["is_active"] else "❌"
             lines.append(
                 f"{status} #{p['id']} | *{escape_md(p['name'])}*\n"
-                f"   💰 Price: Rp {format_rupiah(p['price'])}\n"
-                f"   📦 Stock: {stock}\n"
+                f"   💰 {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
+                f"   📦 {t('admin_stock', lang)}: {stock}\n"
             )
 
         await _safe_edit_or_send(
             query,
             "\n".join(lines),
-            reply_markup=get_admin_back_keyboard(),
+            reply_markup=get_admin_back_keyboard(lang),
         )
 
     elif action == "stockinfo":
@@ -585,56 +594,56 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         products = db.get_active_products()
 
         text = (
-            f"*📊 STOCK INFO*\n"
+            f"*{t('admin_stock_info', lang)}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 Total Ready Stock: *{total_stock}* accounts\n"
-            f"⏳ Pending Orders: *{pending}*\n"
+            f"📦 {t('admin_total_ready', lang)}: *{total_stock}* {t('accounts', lang)}\n"
+            f"⏳ {t('admin_pending_orders', lang)}: *{pending}*\n"
         )
         for p in products:
             p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
             text += f"\n#{p['id']} {escape_md(p['name'])}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
 
-        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard())
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))
 
     elif action == "orders":
         try:
             orders = db.get_all_orders(limit=20)
         except Exception as exc:
             logger.exception("Failed get_all_orders: %s", exc)
-            await _safe_edit_or_send(query, "Sorry, something went wrong.", reply_markup=get_admin_back_keyboard())
+            await _safe_edit_or_send(query, t("admin_try_again", lang), reply_markup=get_admin_back_keyboard(lang))
             return
 
         if not orders:
             await _safe_edit_or_send(
                 query,
-                "*📋 RECENT ORDERS*\n\nNo orders yet.",
-                reply_markup=get_admin_back_keyboard(),
+                t("admin_no_orders", lang),
+                reply_markup=get_admin_back_keyboard(lang),
             )
             return
 
-        lines = [f"*📋 RECENT ORDERS* ({len(orders)})\n"]
+        lines = [f"*{t('admin_recent_orders', lang)}* ({len(orders)})\n"]
         for o in orders:
             username = o.get("username") or "no_user"
             status = o.get("status", "pending")
             emoji = _STATUS_EMOJI.get(status, "⏳")
-            order_id = o["id"]
+            oid = o["id"]
             product = db.get_product(o.get("product_id", 1))
             product_name = escape_md(product["name"]) if product else "N/A"
 
             lines.append(
-                f"#{order_id} | @{username}\n"
+                f"#{oid} | @{username}\n"
                 f"📦 {product_name}\n"
                 f"🔢 {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
                 f"Status: {emoji} {status}\n"
             )
 
         filter_buttons = [
-            InlineKeyboardButton("📋 All", callback_data="admin:orders"),
-            InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
-            InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
+            InlineKeyboardButton(t("btn_all", lang), callback_data="admin:orders"),
+            InlineKeyboardButton(t("btn_pending", lang), callback_data="admin:orders_pending"),
+            InlineKeyboardButton(t("btn_paid", lang), callback_data="admin:orders_paid"),
         ]
         keyboard_rows = [filter_buttons]
-        keyboard_rows.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+        keyboard_rows.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
         await _safe_edit_or_send(
             query,
@@ -646,36 +655,36 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             orders = db.get_all_orders(limit=20, status="pending")
         except Exception:
-            await _safe_edit_or_send(query, "Sorry, something went wrong.", reply_markup=get_admin_back_keyboard())
+            await _safe_edit_or_send(query, t("admin_try_again", lang), reply_markup=get_admin_back_keyboard(lang))
             return
 
         if not orders:
             await _safe_edit_or_send(
                 query,
-                "*⏳ PENDING ORDERS*\n\nNo pending orders.",
-                reply_markup=get_admin_back_keyboard(),
+                t("admin_no_pending", lang),
+                reply_markup=get_admin_back_keyboard(lang),
             )
             return
 
-        lines = [f"*⏳ PENDING ORDERS* ({len(orders)})\n"]
+        lines = [f"*{t('admin_pending_orders_title', lang)}* ({len(orders)})\n"]
         for o in orders:
             username = o.get("username") or "no_user"
-            order_id = o["id"]
+            oid = o["id"]
             product = db.get_product(o.get("product_id", 1))
             product_name = escape_md(product["name"]) if product else "N/A"
             lines.append(
-                f"#{order_id} | @{username}\n"
+                f"#{oid} | @{username}\n"
                 f"📦 {product_name}\n"
                 f"🔢 {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
             )
 
         filter_buttons = [
-            InlineKeyboardButton("📋 All", callback_data="admin:orders"),
-            InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
-            InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
+            InlineKeyboardButton(t("btn_all", lang), callback_data="admin:orders"),
+            InlineKeyboardButton(t("btn_pending", lang), callback_data="admin:orders_pending"),
+            InlineKeyboardButton(t("btn_paid", lang), callback_data="admin:orders_paid"),
         ]
         keyboard_rows = [filter_buttons]
-        keyboard_rows.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+        keyboard_rows.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
         await _safe_edit_or_send(
             query,
@@ -687,36 +696,36 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             orders = db.get_all_orders(limit=20, status="paid")
         except Exception:
-            await _safe_edit_or_send(query, "Sorry, something went wrong.", reply_markup=get_admin_back_keyboard())
+            await _safe_edit_or_send(query, t("admin_try_again", lang), reply_markup=get_admin_back_keyboard(lang))
             return
 
         if not orders:
             await _safe_edit_or_send(
                 query,
-                "*✅ PAID ORDERS*\n\nNo paid orders.",
-                reply_markup=get_admin_back_keyboard(),
+                t("admin_no_paid", lang),
+                reply_markup=get_admin_back_keyboard(lang),
             )
             return
 
-        lines = [f"*✅ PAID ORDERS* ({len(orders)})\n"]
+        lines = [f"*{t('admin_paid_orders', lang)}* ({len(orders)})\n"]
         for o in orders:
             username = o.get("username") or "no_user"
-            order_id = o["id"]
+            oid = o["id"]
             product = db.get_product(o.get("product_id", 1))
             product_name = escape_md(product["name"]) if product else "N/A"
             lines.append(
-                f"#{order_id} | @{username}\n"
+                f"#{oid} | @{username}\n"
                 f"📦 {product_name}\n"
                 f"🔢 {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
             )
 
         filter_buttons = [
-            InlineKeyboardButton("📋 All", callback_data="admin:orders"),
-            InlineKeyboardButton("⏳ Pending", callback_data="admin:orders_pending"),
-            InlineKeyboardButton("✅ Paid", callback_data="admin:orders_paid"),
+            InlineKeyboardButton(t("btn_all", lang), callback_data="admin:orders"),
+            InlineKeyboardButton(t("btn_pending", lang), callback_data="admin:orders_pending"),
+            InlineKeyboardButton(t("btn_paid", lang), callback_data="admin:orders_paid"),
         ]
         keyboard_rows = [filter_buttons]
-        keyboard_rows.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+        keyboard_rows.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
         await _safe_edit_or_send(
             query,
@@ -725,36 +734,35 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
     elif action == "adminlist":
-        lines = ["*👥 ADMIN LIST*\n"]
-        for i, admin_id in enumerate(sorted(config.ADMIN_IDS), 1):
-            is_main = " ⭐" if admin_id == config.ADMIN_USER_ID else ""
-            lines.append(f"{i}. `{admin_id}`{is_main}")
+        lines = [f"*{t('admin_list_title', lang)}*\n"]
+        for i, aid in enumerate(sorted(config.ADMIN_IDS), 1):
+            is_main = " ⭐" if aid == config.ADMIN_USER_ID else ""
+            lines.append(f"{i}. `{aid}`{is_main}")
 
-        lines.append(f"\n📊 Total: *{len(config.ADMIN_IDS)}* admins")
+        lines.append(f"\n📊 {t('admin_total', lang)}: *{len(config.ADMIN_IDS)}* {t('admins', lang)}")
 
         await _safe_edit_or_send(
             query,
             "\n".join(lines),
-            reply_markup=get_admin_back_keyboard(),
+            reply_markup=get_admin_back_keyboard(lang),
         )
 
     elif action == "addproduct":
         context.user_data["admin_state"] = "addproduct_name"
         text = (
-            "*➕ ADD PRODUCT*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📝 Send the *product name* now.\n\n"
-            "Example: `Leonardo AI Account`"
+            f"*{t('admin_add_product', lang)}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('admin_send_name', lang)}"
         )
-        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard())
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))
 
     elif action == "setprice":
         products = db.get_active_products()
         if not products:
             await _safe_edit_or_send(
                 query,
-                "*💰 CHANGE PRICE*\n\nNo products yet.",
-                reply_markup=get_admin_back_keyboard(),
+                f"*{t('admin_change_price', lang)}*\n\n{t('no_products', lang)}",
+                reply_markup=get_admin_back_keyboard(lang),
             )
             return
 
@@ -764,11 +772,11 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"💰 {p['name']} — Rp {format_rupiah(p['price'])}",
                 callback_data=f"admin:spick:{p['id']}",
             )])
-        buttons.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+        buttons.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
         await _safe_edit_or_send(
             query,
-            "*💰 CHANGE PRICE*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nSelect product to change price:",
+            f"*{t('admin_change_price', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n{t('admin_select_product', lang)}",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
 
@@ -781,49 +789,45 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         product = db.get_product(product_id)
         if not product:
-            await _safe_edit_or_send(query, "Product not found.", reply_markup=get_admin_back_keyboard())
+            await _safe_edit_or_send(query, t("admin_not_found", lang, id=product_id), reply_markup=get_admin_back_keyboard(lang))
             return
 
         context.user_data["admin_state"] = "setprice_value"
         context.user_data["setprice_product_id"] = product_id
 
         text = (
-            f"*💰 CHANGE PRICE — {escape_md(product['name'])}*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"Current price: *Rp {format_rupiah(product['price'])}*\n\n"
-            "📝 Send the *new price* now.\n\n"
-            "Example: `15000`"
+            f"*{t('admin_change_price', lang)} — {escape_md(product['name'])}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('admin_current_price', lang)}: *Rp {format_rupiah(product['price'])}*\n\n"
+            f"{t('admin_send_new_price', lang)}"
         )
-        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard())
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))
 
     elif action == "broadcast":
         context.user_data["admin_state"] = "broadcast_msg"
         text = (
-            "*📣 BROADCAST*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📝 Send the *message* to broadcast now.\n\n"
-            "Example: `Weekend promo 20% off!`"
+            f"*{t('admin_broadcast', lang)}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('admin_send_message', lang)}"
         )
-        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard())
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))
 
     elif action == "addadmin":
         context.user_data["admin_state"] = "addadmin_id"
         text = (
-            "*👤 ADD ADMIN*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📝 Send the *Telegram User ID* now.\n\n"
-            "💡 To find ID: Forward a message to @userinfobot\n\n"
-            "Example: `123456789`"
+            f"*{t('admin_add_admin', lang)}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('admin_send_user_id', lang)}"
         )
-        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard())
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))
 
     elif action == "removeadmin":
         others = sorted(config.ADMIN_IDS - {config.ADMIN_USER_ID})
         if not others:
             await _safe_edit_or_send(
                 query,
-                "*👤 REMOVE ADMIN*\n\nNo additional admins to remove.",
-                reply_markup=get_admin_back_keyboard(),
+                t("admin_no_remove", lang),
+                reply_markup=get_admin_back_keyboard(lang),
             )
             return
 
@@ -833,11 +837,11 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"❌ Remove {aid}",
                 callback_data=f"admin:rmadmin:{aid}",
             )])
-        buttons.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+        buttons.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
         await _safe_edit_or_send(
             query,
-            "*👤 REMOVE ADMIN*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nSelect admin to remove:",
+            f"*{t('admin_remove_admin', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n{t('admin_select_admin', lang)}",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
 
@@ -849,13 +853,13 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         except ValueError:
             return
         if remove_id == config.ADMIN_USER_ID:
-            await _safe_edit_or_send(query, "Cannot remove the main admin.", reply_markup=get_admin_back_keyboard())
+            await _safe_edit_or_send(query, t("admin_cannot_remove", lang), reply_markup=get_admin_back_keyboard(lang))
             return
         config.ADMIN_IDS.discard(remove_id)
         await _safe_edit_or_send(
             query,
-            f"*✅ Admin removed!*\n\n🆔 ID: `{remove_id}`\n👥 Total admins: *{len(config.ADMIN_IDS)}*",
-            reply_markup=get_admin_back_keyboard(),
+            f"*{t('admin_removed', lang)}*\n\n🆔 ID: `{remove_id}`\n👥 {t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
+            reply_markup=get_admin_back_keyboard(lang),
         )
 
     elif action == "addstock":
@@ -863,8 +867,8 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not products:
             await _safe_edit_or_send(
                 query,
-                "*📥 ADD STOCK*\n\nNo active products yet. Add a product first.",
-                reply_markup=get_admin_back_keyboard(),
+                t("admin_no_active_products", lang),
+                reply_markup=get_admin_back_keyboard(lang),
             )
             return
 
@@ -872,14 +876,14 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         for p in products:
             stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
             buttons.append([InlineKeyboardButton(
-                f"📦 {p['name']} (Stock: {stock})",
+                f"📦 {p['name']} ({t('admin_stock', lang)}: {stock})",
                 callback_data=f"admin:astk:{p['id']}",
             )])
-        buttons.append([InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="menu:admin")])
+        buttons.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
         await _safe_edit_or_send(
             query,
-            "*📥 ADD STOCK*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nSelect product to add stock to:",
+            f"*{t('admin_add_stock', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n{t('admin_select_stock_product', lang)}",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
 
@@ -893,21 +897,18 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         product = db.get_product(product_id)
         if not product:
-            await _safe_edit_or_send(query, "Product not found.", reply_markup=get_admin_back_keyboard())
+            await _safe_edit_or_send(query, t("admin_not_found", lang, id=product_id), reply_markup=get_admin_back_keyboard(lang))
             return
 
         context.user_data["addstock_product_id"] = product_id
         context.user_data["state"] = "addstock"
 
         text = (
-            f"*📥 ADD STOCK — {escape_md(product['name'])}*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"Current stock: *{db.get_stock_count(product_id)}* accounts\n\n"
-            "*Method 1:* Send a .txt file\n"
-            "Format per line: `email:password`\n\n"
-            "*Method 2:* Paste directly in chat\n"
-            "`email1:password1`\n"
-            "`email2:password2`\n\n"
-            "Send now! 📤"
+            f"*{t('admin_add_stock', lang)} — {escape_md(product['name'])}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('admin_current_stock', lang)}: *{db.get_stock_count(product_id)}* {t('accounts', lang)}\n\n"
+            f"{t('admin_method1', lang)}\n\n"
+            f"{t('admin_method2', lang)}\n\n"
+            f"{t('admin_send_now', lang)}"
         )
-        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard())
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))

@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import db
+from handlers.start import t, format_rupiah, escape_md
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +255,10 @@ async def klikqris_webhook(request: Request):
                     quantity = order["quantity"]
                     product_id = order.get("product_id", 1)
                     user_id = order["user_id"]
+                    user_lang = db.get_user_lang(user_id)
+                    product = db.get_product(product_id)
+                    product_name = product["name"] if product else "N/A"
+
                     stock_items = db.take_stock(order_id, quantity, product_id=product_id)
                     if stock_items:
                         txt_content = ""
@@ -267,30 +272,63 @@ async def klikqris_webhook(request: Request):
                         txt_file = io.BytesIO(txt_bytes)
                         txt_file.name = f"accounts_{order_id}.txt"
                         bot = Bot(token=config.BOT_TOKEN)
+
+                        caption = (
+                            f"{t('payment_success', user_lang)}\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🆔 {t('order_label', user_lang)}: #{order_id}\n"
+                            f"📦 {t('product_label', user_lang)}: {escape_md(product_name)}\n"
+                            f"🔢 {t('quantity_label_short', user_lang)}: {quantity} {t('accounts', user_lang)}\n"
+                            f"💰 {t('total_label', user_lang)}: Rp {format_rupiah(order.get('total', 0))}\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                            f"{t('file_attached', user_lang)}"
+                        )
+
                         await bot.send_document(
                             chat_id=user_id,
                             document=txt_file,
-                            caption=(
-                                f"✅ PAYMENT SUCCESSFUL!\n"
-                                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                                f"🆔 Order: #{order_id}\n"
-                                f"🔢 Quantity: {quantity} accounts\n"
-                                f"💰 Total: Rp {order.get('total', 0):,}\n"
-                                f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                                f"📁 Your account file is attached.\n"
-                                f"Keep it safe! 🔐"
-                            ),
+                            caption=caption,
                         )
                         logger.info("Webhook delivered %d accounts for %s", len(stock_items), order_id)
+
+                        try:
+                            for admin_id in config.ADMIN_IDS:
+                                admin_lang = db.get_user_lang(admin_id)
+                                await bot.send_message(
+                                    chat_id=admin_id,
+                                    text=t("admin_notif_paid", admin_lang,
+                                           order_id=order_id,
+                                           username=order.get("username", "N/A"),
+                                           product_name=escape_md(product_name),
+                                           qty=quantity),
+                                    parse_mode="Markdown",
+                                )
+                        except Exception as e:
+                            logger.warning("Failed to notify admin in webhook: %s", e)
                     else:
                         logger.warning("Webhook order %s paid but stock insufficient!", order_id)
                         from telegram import Bot
                         bot = Bot(token=config.BOT_TOKEN)
                         await bot.send_message(
                             chat_id=user_id,
-                            text=f"Payment successful for Order *#{order_id}*!\n\nHowever, stock is insufficient. Admin will process manually.",
+                            text=t("stock_insufficient", user_lang, order_id=order_id),
                             parse_mode="Markdown",
                         )
+
+                        try:
+                            for admin_id in config.ADMIN_IDS:
+                                admin_lang = db.get_user_lang(admin_id)
+                                await bot.send_message(
+                                    chat_id=admin_id,
+                                    text=t("admin_stock_warning", admin_lang,
+                                           order_id=order_id,
+                                           username=order.get("username", "N/A"),
+                                           product_name=escape_md(product_name),
+                                           qty=quantity),
+                                    parse_mode="Markdown",
+                                )
+                        except Exception as e:
+                            logger.warning("Failed to notify admin stock warning in webhook: %s", e)
             except Exception as e:
                 logger.exception("Webhook delivery failed for %s: %s", order_id, e)
 

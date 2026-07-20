@@ -4,7 +4,7 @@ When status changes to 'SUCCESS' (paid):
   1. Update order status
   2. Fetch stock from DB based on quantity & product_id
   3. Create .txt file with purchased accounts
-  4. Send .txt file to user
+  4. Send .txt file to user (in user's language)
   5. Notify admin
 
 When status is 'EXPIRED'/'FAILED':
@@ -29,15 +29,11 @@ from telegram.ext import ContextTypes
 import config
 import db
 from payments import klikqris
-from handlers.start import build_home_text, get_main_menu_keyboard
+from handlers.start import build_home_text, get_main_menu_keyboard, t, format_rupiah, escape_md
 
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 10
-
-
-def format_rupiah(n: int) -> str:
-    return f"{n:,}".replace(",", ".")
 
 
 async def _cleanup_expired_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -64,12 +60,13 @@ async def _cleanup_expired_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         try:
             user = await context.bot.get_chat(user_id)
-            text = build_home_text(user)
+            lang = db.get_user_lang(user_id)
+            text = build_home_text(user, lang)
             await context.bot.send_message(
                 chat_id=user_id,
                 text=text,
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=get_main_menu_keyboard(user_id),
+                reply_markup=get_main_menu_keyboard(user_id, lang),
             )
         except Exception as e:
             logger.warning("Failed to notify user %s about local expiry: %s", user_id, e)
@@ -123,6 +120,10 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
 
             quantity = order["quantity"]
             user_id = order["user_id"]
+            user_lang = db.get_user_lang(user_id)
+
+            product = db.get_product(product_id)
+            product_name = product["name"] if product else "N/A"
 
             stock_items = db.take_stock(order_id, quantity, product_id=product_id)
 
@@ -140,14 +141,14 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                 txt_file.name = f"accounts_{order_id}.txt"
 
                 caption = (
-                    f"✅ PAYMENT SUCCESSFUL!\n"
+                    f"{t('payment_success', user_lang)}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🆔 Order: #{order_id}\n"
-                    f"🔢 Quantity: {quantity} accounts\n"
-                    f"💰 Total: Rp {format_rupiah(order['total'])}\n"
+                    f"🆔 {t('order_label', user_lang)}: #{order_id}\n"
+                    f"📦 {t('product_label', user_lang)}: {escape_md(product_name)}\n"
+                    f"🔢 {t('quantity_label_short', user_lang)}: {quantity} {t('accounts', user_lang)}\n"
+                    f"💰 {t('total_label', user_lang)}: Rp {format_rupiah(order['total'])}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"📁 Your account file is attached.\n"
-                    f"Keep it safe! 🔐"
+                    f"{t('file_attached', user_lang)}"
                 )
 
                 try:
@@ -161,14 +162,14 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
 
                 try:
                     for admin_id in config.ADMIN_IDS:
+                        admin_lang = db.get_user_lang(admin_id)
                         await bot.send_message(
                             chat_id=admin_id,
-                            text=(
-                                f"✅ Order *#{order_id}* paid & delivered!\n"
-                                f"User: @{order.get('username', 'N/A')}\n"
-                                f"Quantity: {quantity} accounts\n"
-                                f"Status: Delivered"
-                            ),
+                            text=t("admin_notif_paid", admin_lang,
+                                   order_id=order_id,
+                                   username=order.get("username", "N/A"),
+                                   product_name=escape_md(product_name),
+                                   qty=quantity),
                             parse_mode="Markdown",
                         )
                 except Exception as e:
@@ -178,22 +179,18 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                 try:
                     await bot.send_message(
                         chat_id=user_id,
-                        text=(
-                            f"Payment successful for Order *#{order_id}*!\n\n"
-                            f"However, there are not enough accounts in stock. "
-                            f"Admin will process this manually shortly."
-                        ),
+                        text=t("stock_insufficient", user_lang, order_id=order_id),
                         parse_mode="Markdown",
                     )
                     for admin_id in config.ADMIN_IDS:
+                        admin_lang = db.get_user_lang(admin_id)
                         await bot.send_message(
                             chat_id=admin_id,
-                            text=(
-                                f"⚠️ WARNING: Order *#{order_id}* paid but OUT OF STOCK!\n"
-                                f"User: @{order.get('username', 'N/A')}\n"
-                                f"Quantity: {quantity} accounts\n"
-                                f"Please process manually!"
-                            ),
+                            text=t("admin_stock_warning", admin_lang,
+                                   order_id=order_id,
+                                   username=order.get("username", "N/A"),
+                                   product_name=escape_md(product_name),
+                                   qty=quantity),
                             parse_mode="Markdown",
                         )
                 except Exception as e:
@@ -206,6 +203,7 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
 
             user_id = order["user_id"]
             qris_msg_id = order.get("qris_message_id")
+            user_lang = db.get_user_lang(user_id)
 
             if qris_msg_id:
                 try:
@@ -216,12 +214,12 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
 
             try:
                 user = await context.bot.get_chat(user_id)
-                text = build_home_text(user)
+                text = build_home_text(user, user_lang)
                 await bot.send_message(
                     chat_id=user_id,
                     text=text,
                     parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=get_main_menu_keyboard(user_id),
+                    reply_markup=get_main_menu_keyboard(user_id, user_lang),
                 )
             except Exception as e:
                 logger.warning("Failed to notify user %s: %s", user_id, e)
