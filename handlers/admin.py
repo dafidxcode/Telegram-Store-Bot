@@ -41,10 +41,10 @@ async def _deny_non_admin(update: Update, lang="en") -> None:
     await message.reply_text(t("admin_access_denied", lang))
 
 
-def _admin_back_keyboard(lang="en"):
+def _admin_back_keyboard(lang="id", back_data="menu:admin"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
-        [btn_home(lang)],
+        [InlineKeyboardButton(t("btn_back", lang), callback_data=back_data)],
+        [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
     ])
 
 
@@ -302,8 +302,8 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(f"📥 {t('admin_add_more', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
-                    [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
-                    [btn_home(lang)],
+                    [InlineKeyboardButton(t("btn_back", lang), callback_data="admin:addstock")],
+                    [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
                 ]),
             )
         else:
@@ -314,8 +314,8 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(f"🔄 {t('admin_try_again', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
-                    [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
-                    [btn_home(lang)],
+                    [InlineKeyboardButton(t("btn_back", lang), callback_data="admin:addstock")],
+                    [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
                 ]),
             )
         return

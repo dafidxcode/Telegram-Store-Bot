@@ -201,20 +201,23 @@ def delete_product(product_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 def add_stock_batch(lines: list[str], product_id: int = 1) -> int:
-    """Parse lines of format email:password and insert ready stock."""
+    """Parse lines of stock (1 line per item/account) and insert ready stock."""
     assert _conn is not None
     count = 0
     for line in lines:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        parts = line.split(":")
-        if len(parts) < 2:
-            continue
-        email = parts[0].strip()
-        password = parts[1].strip()
-        balance = parts[2].strip() if len(parts) > 2 else ""
-        if not email or not password:
+        parts = line.split(":", 2)
+        if len(parts) >= 2:
+            email = parts[0].strip()
+            password = parts[1].strip()
+            balance = parts[2].strip() if len(parts) > 2 else ""
+        else:
+            email = line
+            password = ""
+            balance = ""
+        if not email:
             continue
         try:
             _conn.execute(
@@ -226,6 +229,7 @@ def add_stock_batch(lines: list[str], product_id: int = 1) -> int:
             pass
     _conn.commit()
     return count
+
 
 
 def get_stock_count(product_id: int | None = None) -> int:
@@ -433,8 +437,10 @@ def get_user_lang(user_id: int) -> str:
     assert _conn is not None
     row = _conn.execute("SELECT lang FROM users WHERE user_id = ?", (user_id,)).fetchone()
     if row and row["lang"]:
-        return row["lang"]
-    return "en"
+        lang = row["lang"]
+        return "id" if lang == "ms" else lang
+    return "id"
+
 
 
 def get_all_user_ids() -> list[int]:

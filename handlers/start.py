@@ -170,8 +170,8 @@ def build_products_text(lang: str = "en") -> str:
     return "\n".join(lines)
 
 
-def get_main_menu_keyboard(user_id: int = 0, lang: str = "en"):
-    lang_label = "🌐 Bahasa Melayu" if lang == "en" else "🌐 English"
+def get_main_menu_keyboard(user_id: int = 0, lang: str = "id"):
+    lang_label = "🌐 Bahasa Indonesia" if lang == "en" else "🌐 English"
 
     rows = [
         [InlineKeyboardButton(t("btn_product_list", lang), callback_data="menu:produk")],
@@ -188,7 +188,7 @@ def get_main_menu_keyboard(user_id: int = 0, lang: str = "en"):
     return InlineKeyboardMarkup(rows)
 
 
-def get_admin_panel_keyboard(lang="en"):
+def get_admin_panel_keyboard(lang="id"):
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(t("btn_view_products", lang), callback_data="admin:products"),
@@ -200,24 +200,27 @@ def get_admin_panel_keyboard(lang="en"):
         ],
         [
             InlineKeyboardButton(t("btn_add_product", lang), callback_data="admin:addproduct"),
+            InlineKeyboardButton(t("btn_delete_product", lang), callback_data="admin:delproduct"),
+        ],
+        [
             InlineKeyboardButton(t("btn_add_stock", lang), callback_data="admin:addstock"),
-        ],
-        [
             InlineKeyboardButton(t("btn_change_price", lang), callback_data="admin:setprice"),
-            InlineKeyboardButton(t("btn_broadcast", lang), callback_data="admin:broadcast"),
         ],
         [
+            InlineKeyboardButton(t("btn_broadcast", lang), callback_data="admin:broadcast"),
             InlineKeyboardButton(t("btn_add_admin", lang), callback_data="admin:addadmin"),
+        ],
+        [
             InlineKeyboardButton(t("btn_remove_admin", lang), callback_data="admin:removeadmin"),
         ],
-        [InlineKeyboardButton(t("btn_back_to_menu", lang), callback_data="menu:start")],
+        [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
     ])
 
 
-def get_admin_back_keyboard(lang="en"):
+def get_admin_back_keyboard(lang="id", back_data="menu:admin"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")],
-        [InlineKeyboardButton(t("btn_back_to_menu", lang), callback_data="menu:start")],
+        [InlineKeyboardButton(t("btn_back", lang), callback_data=back_data)],
+        [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
     ])
 
 
@@ -343,7 +346,7 @@ async def handle_lang_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     current = get_lang(context, user.id)
-    new_lang = "ms" if current == "en" else "en"
+    new_lang = "id" if current == "en" else "en"
     save_lang(context, user.id, new_lang)
 
     text = build_home_text(user, new_lang)
@@ -912,3 +915,47 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"{t('admin_send_now', lang)}"
         )
         await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))
+
+    elif action == "delproduct":
+        products = db.get_all_products()
+        if not products:
+            await _safe_edit_or_send(
+                query,
+                t("admin_no_products", lang),
+                reply_markup=get_admin_back_keyboard(lang),
+            )
+            return
+
+        buttons = []
+        for p in products:
+            buttons.append([InlineKeyboardButton(
+                f"🗑️ #{p['id']} {p['name']} (Rp {format_rupiah(p['price'])})",
+                callback_data=f"admin:dprod:{p['id']}",
+            )])
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")])
+
+        await _safe_edit_or_send(
+            query,
+            f"*{t('btn_delete_product', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n{t('admin_select_delete_product', lang)}",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+    elif action == "dprod":
+        if len(parts) < 3:
+            return
+        try:
+            product_id = int(parts[2])
+        except ValueError:
+            return
+        product = db.get_product(product_id)
+        if not product:
+            await _safe_edit_or_send(query, t("admin_not_found", lang, id=product_id), reply_markup=get_admin_back_keyboard(lang))
+            return
+
+        db.delete_product(product_id)
+        await _safe_edit_or_send(
+            query,
+            t("admin_product_deleted_success", lang, id=product_id, name=escape_md(product["name"])),
+            reply_markup=get_admin_back_keyboard(lang),
+        )
+

@@ -263,11 +263,15 @@ async def klikqris_webhook(request: Request):
                     if stock_items:
                         txt_content = ""
                         for item in stock_items:
+                            em = item.get("email", "")
+                            pw = item.get("password", "")
                             bal = item.get("balance", "")
-                            if bal:
-                                txt_content += f"{item['email']}:{item['password']}:{bal}\n"
+                            if pw and bal:
+                                txt_content += f"{em}:{pw}:{bal}\n"
+                            elif pw:
+                                txt_content += f"{em}:{pw}\n"
                             else:
-                                txt_content += f"{item['email']}:{item['password']}\n"
+                                txt_content += f"{em}\n"
                         txt_bytes = txt_content.encode("utf-8")
                         txt_file = io.BytesIO(txt_bytes)
                         txt_file.name = f"accounts_{order_id}.txt"
