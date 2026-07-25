@@ -77,8 +77,8 @@ def main():
 
     app.add_error_handler(error_handler)
     start.register(app)
-    admin.register(app)
     buy.register(app)
+    admin.register(app)
 
     if config.KLIKQRIS_ACTIVE and app.job_queue is not None:
         app.job_queue.run_repeating(

@@ -475,14 +475,17 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
         max_qty = stock if stock else 999
         qty = min(qty + 1, max_qty)
     elif action == "input":
-        await query.edit_message_text(
+        await _safe_edit_or_send(
+            query,
             f"{t('enter_quantity_title', lang)}\n\n"
             f"{t('product_label', lang)}: *{escape_md(product['name'])}*\n"
             f"{t('price', lang)}: *Rp {format_rupiah(product['price'])}/{t('accounts', lang)}*\n"
             f"{t('stock', lang)}: *{stock if stock else '∞'}*\n\n"
             f"{t('type_number', lang)}\n"
             f"{t('example_type', lang, n=5)}",
-            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(t("cancel", lang), callback_data="buy:cancel")
+            ]])
         )
         context.user_data["state"] = "input_qty"
         return JUMLAH
