@@ -32,6 +32,7 @@ from handlers.start import (
     btn_cancel_payment,
     global_nav_keyboard,
     get_main_menu_keyboard,
+    _safe_edit_or_send,
     escape_md,
     get_lang,
     t,
@@ -387,14 +388,14 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
 
     product = db.get_product(product_id)
     if not product or not product["is_active"]:
-        await query.edit_message_text(t("product_not_available", lang))
+        await _safe_edit_or_send(query, t("product_not_available", lang), reply_markup=get_main_menu_keyboard(user_id, lang))
         return ConversationHandler.END
 
     stock = db.get_stock_count(product_id) if product["stock_type"] == "limited" else None
     if product["stock_type"] == "limited" and (stock is None or stock <= 0):
-        await query.edit_message_text(
+        await _safe_edit_or_send(
+            query,
             t("out_of_stock", lang, name=escape_md(product['name'])),
-            parse_mode=ParseMode.MARKDOWN,
             reply_markup=get_main_menu_keyboard(user_id, lang),
         )
         return ConversationHandler.END
@@ -416,7 +417,7 @@ async def _show_product_detail(query, product, qty, stock, lang="en"):
     detail_lines = detail.split("\n") if detail else []
     detail_text = ""
     if detail_lines:
-        detail_text = "\n".join(f"• {line.strip()}" for line in detail_lines if line.strip()) + "\n\n"
+        detail_text = "\n".join(f"• {escape_md(line.strip())}" for line in detail_lines if line.strip()) + "\n\n"
 
     text = (
         f"*{escape_md(product['name'])}*\n"
@@ -447,7 +448,7 @@ async def _show_product_detail(query, product, qty, stock, lang="en"):
         [InlineKeyboardButton(t("cancel", lang), callback_data="buy:cancel")],
     ])
 
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    await _safe_edit_or_send(query, text, reply_markup=keyboard)
 
 
 async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

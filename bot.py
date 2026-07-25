@@ -7,7 +7,7 @@ import threading
 import uvicorn
 import warnings
 from telegram import Update
-from telegram.ext import ApplicationBuilder
+from telegram.ext import ApplicationBuilder, ContextTypes
 from telegram.warnings import PTBUserWarning
 
 warnings.filterwarnings("ignore", category=PTBUserWarning)
@@ -34,6 +34,15 @@ def _start_webhook_server():
     port = int(os.getenv("PORT", "8080"))
     logger.info("Starting webhook server on port %d", port)
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error("Exception handling update: %s", context.error, exc_info=context.error)
+    if isinstance(update, Update) and update.callback_query:
+        try:
+            await update.callback_query.answer("⚠️ Sesi telah di-reset, silakan coba lagi.", show_alert=True)
+        except Exception:
+            pass
 
 
 def main():
@@ -66,6 +75,7 @@ def main():
         .build()
     )
 
+    app.add_error_handler(error_handler)
     start.register(app)
     admin.register(app)
     buy.register(app)
