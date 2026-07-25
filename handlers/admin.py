@@ -120,6 +120,9 @@ def register(app: Application) -> None:
 
 async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """If in addstock mode, try parsing as email:password. Otherwise try quick-add product."""
+    if not _is_admin(update):
+        return
+
     user_id = update.effective_user.id if update.effective_user else 0
     lang = get_lang(context, user_id)
 
