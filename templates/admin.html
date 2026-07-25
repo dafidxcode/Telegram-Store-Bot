@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="id" class="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Viintools - Admin Panel Web Dashboard</title>
+    <title>Viintools - Admin Panel</title>
+    <link rel="icon" type="image/png" href="/assets/viintools_bot.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -26,7 +28,12 @@
             --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
 
         body {
             background-color: var(--bg-body);
@@ -53,20 +60,36 @@
             padding: 14px 20px;
             border-radius: var(--radius-md);
             color: #fff;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
             display: flex;
             align-items: center;
             gap: 12px;
             font-size: 14px;
             animation: fadeInRight 0.3s ease;
         }
-        .toast.success { border-left: 4px solid var(--success); }
-        .toast.error { border-left: 4px solid var(--danger); }
-        .toast.warning { border-left: 4px solid var(--warning); }
+
+        .toast.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .toast.warning {
+            border-left: 4px solid var(--warning);
+        }
 
         @keyframes fadeInRight {
-            from { opacity: 0; transform: translateX(30px); }
-            to { opacity: 1; transform: translateX(0); }
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         /* LOGIN SCREEN */
@@ -75,7 +98,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: radial-gradient(circle at top, #1e1b4b 0%, #0b0f19 70%);
+            background: linear-gradient(rgba(11, 15, 25, 0.8), rgba(11, 15, 25, 0.88)), url('/assets/landscape.png') no-repeat center center/cover;
         }
 
         .login-card {
@@ -155,14 +178,42 @@
             transition: all 0.2s;
         }
 
-        .btn:hover { background: var(--primary-hover); }
-        .btn-success { background: var(--success); }
-        .btn-success:hover { background: #059669; }
-        .btn-danger { background: var(--danger); }
-        .btn-danger:hover { background: #dc2626; }
-        .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
-        .btn-outline:hover { background: rgba(255,255,255,0.05); }
-        .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: var(--radius-sm); width: auto; }
+        .btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-success {
+            background: var(--success);
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: var(--radius-sm);
+            width: auto;
+        }
 
         /* DASHBOARD LAYOUT */
         #main-app {
@@ -216,17 +267,44 @@
             width: 38px;
             height: 20px;
         }
-        .switch input { opacity: 0; width: 0; height: 0; }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
         .slider {
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #374151; transition: .3s; border-radius: 20px;
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #374151;
+            transition: .3s;
+            border-radius: 20px;
         }
+
         .slider:before {
-            position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px;
-            background-color: white; transition: .3s; border-radius: 50%;
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
         }
-        input:checked + .slider { background-color: var(--danger); }
-        input:checked + .slider:before { transform: translateX(18px); }
+
+        input:checked+.slider {
+            background-color: var(--danger);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(18px);
+        }
 
         /* NAV TABS */
         .nav-tabs {
@@ -254,8 +332,15 @@
             white-space: nowrap;
         }
 
-        .tab-btn:hover { color: var(--text-main); }
-        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+        .tab-btn:hover {
+            color: var(--text-main);
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            font-weight: 600;
+        }
 
         /* CONTAINER CONTENT */
         main {
@@ -266,8 +351,13 @@
             margin: 0 auto;
         }
 
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
 
         /* STATS GRID */
         .stats-grid {
@@ -366,7 +456,9 @@
             border-bottom: 1px solid var(--border-color);
         }
 
-        tr:hover td { background: rgba(255,255,255,0.02); }
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
 
         .badge {
             display: inline-block;
@@ -376,17 +468,35 @@
             font-weight: 600;
         }
 
-        .badge-success { background: rgba(16, 185, 129, 0.15); color: var(--success); }
-        .badge-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
-        .badge-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
-        .badge-info { background: rgba(99, 102, 241, 0.15); color: var(--primary); }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .badge-info {
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--primary);
+        }
 
         /* MODAL */
         .modal {
             display: none;
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(5px);
             z-index: 999;
             align-items: center;
@@ -394,7 +504,9 @@
             padding: 20px;
         }
 
-        .modal.active { display: flex; }
+        .modal.active {
+            display: flex;
+        }
 
         .modal-content {
             background: var(--bg-card);
@@ -413,10 +525,23 @@
             margin-bottom: 20px;
         }
 
-        .modal-title { font-size: 18px; font-weight: 700; }
-        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+        }
 
-        textarea.form-control { min-height: 120px; resize: vertical; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        textarea.form-control {
+            min-height: 120px;
+            resize: vertical;
+        }
 
         /* GRID TWO COLS */
         .grid-2 {
@@ -426,13 +551,25 @@
         }
 
         @media (max-width: 768px) {
-            .grid-2 { grid-template-columns: 1fr; }
-            header { padding: 16px; }
-            main { padding: 16px; }
-            .nav-tabs { padding: 0 16px; }
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+
+            header {
+                padding: 16px;
+            }
+
+            main {
+                padding: 16px;
+            }
+
+            .nav-tabs {
+                padding: 0 16px;
+            }
         }
     </style>
 </head>
+
 <body>
 
     <!-- Toast Notifications Container -->
@@ -441,16 +578,21 @@
     <!-- LOGIN SCREEN -->
     <div id="login-screen">
         <div class="login-card">
-            <div class="logo">⚡</div>
+            <div class="logo">
+                <img src="/assets/viintools_bot.png"
+                    style="width:72px; height:72px; border-radius:50%; border:2px solid var(--primary); box-shadow:0 0 20px rgba(99, 102, 241, 0.4); margin-bottom: 12px;"
+                    alt="Logo">
+            </div>
             <h2>Viintools Admin</h2>
-            <p>Masuk ke Web Panel Admin Bot</p>
+            <p>━━━━━━━━━━━━━━━━━━━━━━━━</p>
 
             <form id="login-form">
                 <div class="form-group">
-                    <label>Password Authentication / Telegram UID</label>
-                    <input type="password" id="auth-input" class="form-control" placeholder="Masukkan password (ADMIN_AUTH) atau UID..." required autofocus>
+                    <label>Password :</label>
+                    <input type="password" id="auth-input" class="form-control" placeholder="Masukkan password..."
+                        required autofocus>
                 </div>
-                <button type="submit" class="btn">🚀 Masuk ke Dashboard</button>
+                <button type="submit" class="btn">Login</button>
             </form>
         </div>
     </div>
@@ -460,7 +602,9 @@
         <!-- HEADER -->
         <header>
             <div class="brand">
-                <span style="font-size: 24px;">⚡</span>
+                <img src="/assets/viintools_bot.png"
+                    style="width:38px; height:38px; border-radius:50%; border: 1px solid var(--border-color);"
+                    alt="Logo">
                 <div>
                     <div class="brand-title" id="app-shop-name">Viintools Admin</div>
                     <div style="font-size: 12px; color: var(--text-muted);">Web Server Admin Panel</div>
@@ -554,7 +698,8 @@
                             </tr>
                             <tr>
                                 <td>🏆 Produk Terlaris</td>
-                                <td style="text-align: right; font-weight: 600; color: var(--primary);" id="fin-best">-</td>
+                                <td style="text-align: right; font-weight: 600; color: var(--primary);" id="fin-best">-
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -564,9 +709,12 @@
                             <span class="section-title">⚡ Aksi Cepat</span>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <button class="btn btn-outline" onclick="openAddProductModal()">➕ Tambah Produk Baru</button>
-                            <button class="btn btn-outline" onclick="switchTab('stock')">📥 Input Stok Akun Bulk</button>
-                            <button class="btn btn-outline" onclick="switchTab('orders')">🔍 Cari / Approve Pesanan</button>
+                            <button class="btn btn-outline" onclick="openAddProductModal()">➕ Tambah Produk
+                                Baru</button>
+                            <button class="btn btn-outline" onclick="switchTab('stock')">📥 Input Stok Akun
+                                Bulk</button>
+                            <button class="btn btn-outline" onclick="switchTab('orders')">🔍 Cari / Approve
+                                Pesanan</button>
                         </div>
                     </div>
                 </div>
@@ -590,7 +738,9 @@
                                 </tr>
                             </thead>
                             <tbody id="dashboard-recent-orders">
-                                <tr><td colspan="6" style="text-align:center;">Memuat data...</td></tr>
+                                <tr>
+                                    <td colspan="6" style="text-align:center;">Memuat data...</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -618,7 +768,9 @@
                                 </tr>
                             </thead>
                             <tbody id="products-table-body">
-                                <tr><td colspan="7" style="text-align:center;">Memuat produk...</td></tr>
+                                <tr>
+                                    <td colspan="7" style="text-align:center;">Memuat produk...</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -639,7 +791,9 @@
                             </div>
                             <div class="form-group">
                                 <label>Paste Data Akun (1 baris per akun: <code>email:password</code>)</label>
-                                <textarea id="stock-text-input" class="form-control" placeholder="user1@gmail.com:pass123&#10;user2@gmail.com:pass456" required></textarea>
+                                <textarea id="stock-text-input" class="form-control"
+                                    placeholder="user1@gmail.com:pass123&#10;user2@gmail.com:pass456"
+                                    required></textarea>
                             </div>
                             <button type="submit" class="btn btn-success">📥 Simpan & Tambahkan Stok</button>
                         </form>
@@ -665,7 +819,9 @@
                     <div class="section-header">
                         <span class="section-title">📋 Manajemen & Pencarian Transaksi</span>
                         <div style="display: flex; gap: 10px;">
-                            <input type="text" id="order-search-input" class="form-control" style="width: 250px;" placeholder="Cari Order ID / User ID..." onkeyup="if(event.key==='Enter') searchOrders()">
+                            <input type="text" id="order-search-input" class="form-control" style="width: 250px;"
+                                placeholder="Cari Order ID / User ID..."
+                                onkeyup="if(event.key==='Enter') searchOrders()">
                             <button class="btn btn-sm" onclick="searchOrders()">🔍 Cari</button>
                         </div>
                     </div>
@@ -684,7 +840,9 @@
                                 </tr>
                             </thead>
                             <tbody id="orders-table-body">
-                                <tr><td colspan="8" style="text-align:center;">Memuat transaksi...</td></tr>
+                                <tr>
+                                    <td colspan="8" style="text-align:center;">Memuat transaksi...</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -700,7 +858,9 @@
                     <form id="broadcast-form">
                         <div class="form-group">
                             <label>Isi Pesan (Format Markdown Telegram)</label>
-                            <textarea id="broadcast-text" class="form-control" placeholder="⚡ PROMO SPESIAL HARI INI!&#10;&#10;Gunakan kode promo untuk potongan harga..." required style="min-height: 180px;"></textarea>
+                            <textarea id="broadcast-text" class="form-control"
+                                placeholder="⚡ PROMO SPESIAL HARI INI!&#10;&#10;Gunakan kode promo untuk potongan harga..."
+                                required style="min-height: 180px;"></textarea>
                         </div>
                         <button type="submit" class="btn">🚀 Kirim Broadcast ke Semua User</button>
                     </form>
@@ -714,11 +874,14 @@
                         <div class="section-header">
                             <span class="section-title">👥 Daftar Admin Telegram</span>
                         </div>
-                        <div id="admin-list-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
+                        <div id="admin-list-container"
+                            style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
 
                         <form id="add-admin-form" style="display: flex; gap: 10px;">
-                            <input type="number" id="new-admin-uid" class="form-control" placeholder="Masukkan Telegram User ID..." required>
-                            <button type="submit" class="btn btn-sm" style="width: auto; white-space: nowrap;">➕ Tambah</button>
+                            <input type="number" id="new-admin-uid" class="form-control"
+                                placeholder="Masukkan Telegram User ID..." required>
+                            <button type="submit" class="btn btn-sm" style="width: auto; white-space: nowrap;">➕
+                                Tambah</button>
                         </form>
                     </div>
 
@@ -727,7 +890,9 @@
                             <span class="section-title">⚙️ Informasi Sistem Bot</span>
                         </div>
                         <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
-                            Web Panel Admin terhubung langsung ke SQLite database (<code>bot.db</code>). Seluruh aktivitas perubahan produk, penambahan stok, dan verifikasi pesanan akan tersinkronisasi seketika dengan Telegram Bot.
+                            Web Panel Admin terhubung langsung ke SQLite database (<code>bot.db</code>). Seluruh
+                            aktivitas perubahan produk, penambahan stok, dan verifikasi pesanan akan tersinkronisasi
+                            seketika dengan Telegram Bot.
                         </p>
                     </div>
                 </div>
@@ -745,7 +910,8 @@
             <form id="form-add-product">
                 <div class="form-group">
                     <label>Nama Produk</label>
-                    <input type="text" id="add-p-name" class="form-control" placeholder="Contoh: Canva Pro 1 Bulan" required>
+                    <input type="text" id="add-p-name" class="form-control" placeholder="Contoh: Canva Pro 1 Bulan"
+                        required>
                 </div>
                 <div class="form-group">
                     <label>Harga (Rupiah)</label>
@@ -753,7 +919,8 @@
                 </div>
                 <div class="form-group">
                     <label>Deskripsi Produk</label>
-                    <textarea id="add-p-desc" class="form-control" placeholder="Keterangan garansi, fitur, dll..."></textarea>
+                    <textarea id="add-p-desc" class="form-control"
+                        placeholder="Keterangan garansi, fitur, dll..."></textarea>
                 </div>
                 <button type="submit" class="btn">Simpan Produk</button>
             </form>
@@ -816,7 +983,7 @@
                 const res = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: val, telegram_id: val })
+                    body: JSON.stringify({ password: val })
                 });
                 const data = await res.json();
                 if (res.ok && data.success) {
@@ -895,7 +1062,7 @@
             document.getElementById('fin-today').innerText = formatRupiah(data.revenue.today_revenue) + ` (${data.revenue.today_orders} tx)`;
             document.getElementById('fin-week').innerText = formatRupiah(data.revenue.week_revenue) + ` (${data.revenue.week_orders} tx)`;
             document.getElementById('fin-month').innerText = formatRupiah(data.revenue.month_revenue) + ` (${data.revenue.month_orders} tx)`;
-            
+
             const best = data.revenue.best_product;
             document.getElementById('fin-best').innerText = best ? `${best.name} (${best.total_qty} terjuall)` : '-';
 
@@ -1165,4 +1332,5 @@
         initDashboard();
     </script>
 </body>
+
 </html>

@@ -25,7 +25,11 @@ from handlers.start import t, format_rupiah, escape_md
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Viintools Admin Dashboard")
+app = FastAPI(title="Viintools Admin")
+
+assets_dir = Path(__file__).parent / "assets"
+if assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 # Admin session store (token -> telegram_user_id)
 _admin_sessions: dict[str, int] = {}
@@ -86,22 +90,11 @@ async def api_auth_login(request: Request, response: Response):
         body = {}
 
     password = str(body.get("password", "")).strip()
-    telegram_id_raw = str(body.get("telegram_id", "")).strip()
 
-    user_id = 0
-    if password and password == config.ADMIN_AUTH:
-        user_id = config.ADMIN_USER_ID
-    elif telegram_id_raw:
-        try:
-            tid = int(telegram_id_raw)
-            if tid in config.ADMIN_IDS or tid == config.ADMIN_USER_ID:
-                user_id = tid
-        except ValueError:
-            pass
+    if not password or password != config.ADMIN_AUTH:
+        return JSONResponse(status_code=401, content={"error": "Password ADMIN_AUTH salah!"})
 
-    if user_id == 0:
-        return JSONResponse(status_code=401, content={"error": "Password atau Telegram User ID salah!"})
-
+    user_id = config.ADMIN_USER_ID
     token = _get_admin_token(user_id)
     _admin_sessions[token] = user_id
 
