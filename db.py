@@ -208,6 +208,8 @@ def add_stock_batch(lines: list[str], product_id: int = 1) -> int:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
+        if "|" in line and ":" not in line:
+            line = line.replace("|", ":")
         parts = line.split(":", 2)
         if len(parts) >= 2:
             email = parts[0].strip()
@@ -220,11 +222,12 @@ def add_stock_batch(lines: list[str], product_id: int = 1) -> int:
         if not email:
             continue
         try:
-            _conn.execute(
+            cur = _conn.execute(
                 "INSERT OR IGNORE INTO stock (product_id, email, password, balance) VALUES (?, ?, ?, ?)",
                 (product_id, email, password, balance),
             )
-            count += 1
+            if cur.rowcount > 0:
+                count += 1
         except sqlite3.IntegrityError:
             pass
     _conn.commit()
@@ -240,7 +243,9 @@ def get_stock_count(product_id: int | None = None) -> int:
             (product_id,),
         ).fetchone()
     else:
-        row = _conn.execute("SELECT COUNT(*) as cnt FROM stock WHERE status = 'ready'").fetchone()
+        row = _conn.execute(
+            "SELECT COUNT(*) as cnt FROM stock s JOIN products p ON s.product_id = p.id WHERE s.status = 'ready' AND p.is_active = 1"
+        ).fetchone()
     return row["cnt"] if row else 0
 
 
