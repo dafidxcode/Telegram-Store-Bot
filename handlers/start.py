@@ -1254,8 +1254,26 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         product_name = product["name"] if product else "Produk"
         buyer_lang = db.get_user_lang(order["user_id"])
 
-        lines = [f"{item['email']}:{item['password']}:{item['balance']}".rstrip(":") for item in items]
-        doc_content = "\n".join(lines)
+        product_desc = (product.get("description") or "").strip() if product else ""
+        txt_lines = []
+        if product_desc:
+            txt_lines.append("==================================================")
+            txt_lines.append(f"CATATAN / PANDUAN PENGGUNAAN ({product_name}):")
+            txt_lines.append(product_desc)
+            txt_lines.append("==================================================\n")
+
+        for item in items:
+            em = item.get("email", "")
+            pw = item.get("password", "")
+            bal = item.get("balance", "")
+            if pw and bal:
+                txt_lines.append(f"{em}:{pw}:{bal}")
+            elif pw:
+                txt_lines.append(f"{em}:{pw}")
+            else:
+                txt_lines.append(f"{em}")
+
+        doc_content = "\n".join(txt_lines)
 
         import io
         file_bytes = io.BytesIO(doc_content.encode("utf-8"))

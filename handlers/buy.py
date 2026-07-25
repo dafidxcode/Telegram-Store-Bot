@@ -31,6 +31,7 @@ from handlers.start import (
     btn_back,
     btn_cancel_payment,
     global_nav_keyboard,
+    get_main_menu_keyboard,
     escape_md,
     get_lang,
     t,
@@ -287,12 +288,13 @@ def register(app: Application) -> None:
                 CallbackQueryHandler(handle_confirm, pattern=r"^confirm:(yes|no)$"),
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel_conversation)],
+        fallbacks=[CommandHandler("cancel", cancel_conversation), CallbackQueryHandler(handle_cancel_btn, pattern=r"^buy:cancel$")],
         per_message=False,
         per_chat=True,
         conversation_timeout=600,
     )
     app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(handle_cancel_btn, pattern=r"^buy:cancel$"))
     app.add_handler(CommandHandler("myorders", cmd_myorders))
     app.add_handler(CommandHandler("pesanan", cmd_myorders))
 
@@ -300,7 +302,10 @@ def register(app: Application) -> None:
 async def handle_cancel_btn(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     if query:
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception:
+            pass
     user_id = (update.effective_user.id or 0) if update.effective_user else 0
     lang = get_lang(context, user_id)
     context.user_data.pop("product_id", None)
@@ -309,7 +314,27 @@ async def handle_cancel_btn(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data.pop("state", None)
     context.user_data.pop("admin_state", None)
     if query:
-        await query.edit_message_text(t("cancelled", lang), reply_markup=get_main_menu_keyboard(user_id, lang))
+        try:
+            await query.edit_message_text(
+                t("cancelled", lang),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu_keyboard(user_id, lang)
+            )
+        except Exception:
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+            if query.message:
+                try:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=t("cancelled", lang),
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=get_main_menu_keyboard(user_id, lang)
+                    )
+                except Exception:
+                    pass
     return ConversationHandler.END
 
 

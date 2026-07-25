@@ -128,7 +128,14 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
             stock_items = db.take_stock(order_id, quantity, product_id=product_id)
 
             if stock_items:
+                product_desc = (product.get("description") or "").strip() if product else ""
                 txt_content = ""
+                if product_desc:
+                    txt_content += f"==================================================\n"
+                    txt_content += f"CATATAN / PANDUAN PENGGUNAAN ({product_name}):\n"
+                    txt_content += f"{product_desc}\n"
+                    txt_content += f"==================================================\n\n"
+
                 for item in stock_items:
                     em = item.get("email", "")
                     pw = item.get("password", "")
