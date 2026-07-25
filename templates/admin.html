@@ -901,7 +901,7 @@
     <div id="modal-add-product" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <span class="modal-title">➕ Tambah Produk Baru</span>
+                <span class="modal-title"><i class="fa-solid fa-square-plus" style="color: var(--primary);"></i> Tambah Produk Baru</span>
                 <button class="modal-close" onclick="closeModal('modal-add-product')">&times;</button>
             </div>
             <form id="form-add-product">
@@ -919,7 +919,7 @@
                     <textarea id="add-p-desc" class="form-control"
                         placeholder="Keterangan garansi, fitur, dll..."></textarea>
                 </div>
-                <button type="submit" class="btn">Simpan Produk</button>
+                <button type="submit" class="btn"><i class="fa-solid fa-floppy-disk"></i> Simpan Produk</button>
             </form>
         </div>
     </div>
@@ -928,7 +928,7 @@
     <div id="modal-edit-product" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <span class="modal-title">✏️ Edit Produk</span>
+                <span class="modal-title"><i class="fa-solid fa-pen-to-square" style="color: var(--primary);"></i> Edit Produk</span>
                 <button class="modal-close" onclick="closeModal('modal-edit-product')">&times;</button>
             </div>
             <form id="form-edit-product">
@@ -948,11 +948,11 @@
                 <div class="form-group">
                     <label>Status Produk</label>
                     <select id="edit-p-status" class="form-control">
-                        <option value="1">🟢 Aktif (Tampil di Bot)</option>
-                        <option value="0">🔴 Nonaktif (Sembunyikan)</option>
+                        <option value="1">Aktif (Tampil di Bot)</option>
+                        <option value="0">Nonaktif (Sembunyikan)</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-success">Perbarui Produk</button>
+                <button type="submit" class="btn btn-success"><i class="fa-solid fa-check"></i> Perbarui Produk</button>
             </form>
         </div>
     </div>
@@ -1102,11 +1102,11 @@
                     <td>${formatRupiah(p.price)}</td>
                     <td><span class="badge badge-info">${p.stock_count}</span></td>
                     <td style="max-width:200px; font-size:12px; color:var(--text-muted);">${p.description || '-'}</td>
-                    <td><span class="badge ${badge}">${p.is_active ? '🟢 Aktif' : '🔴 Nonaktif'}</span></td>
+                    <td><span class="badge ${badge}">${p.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
                     <td>
                         <div style="display:flex; gap:6px;">
-                            <button class="btn btn-sm btn-outline" onclick='openEditProductModal(${JSON.stringify(p)})'>✏️ Edit</button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">🗑️</button>
+                            <button class="btn btn-sm btn-outline" onclick='openEditProductModal(${JSON.stringify(p)})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </td>
                 `;

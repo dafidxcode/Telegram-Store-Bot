@@ -7,7 +7,10 @@ import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 
-import qrcode
+try:
+    import qrcode
+except ImportError:
+    qrcode = None
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -172,7 +175,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             sent_msg = None
 
     # --- Strategy 3: render QR code from qris_content string ---
-    if sent_msg is None and qris_content:
+    if sent_msg is None and qris_content and qrcode is not None:
         try:
             qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
             qr.add_data(qris_content)

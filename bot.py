@@ -5,8 +5,12 @@ import os
 import threading
 
 import uvicorn
+import warnings
 from telegram import Update
 from telegram.ext import ApplicationBuilder
+from telegram.warnings import PTBUserWarning
+
+warnings.filterwarnings("ignore", category=PTBUserWarning)
 
 import config
 import db

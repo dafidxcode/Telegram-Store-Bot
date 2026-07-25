@@ -116,7 +116,7 @@ class KlikQRIS:
 
             data["payment_status"] = str(payment_status).strip().upper()
             raw["data"] = data
-            logger.info("check_status %s: payment_status=%s keys=%s", order_id, data["payment_status"], list(data.keys()))
+            logger.debug("check_status %s: payment_status=%s keys=%s", order_id, data["payment_status"], list(data.keys()))
             return raw
         except httpx.HTTPStatusError as e:
             raise KlikQRISError(f"HTTP {e.response.status_code}") from e

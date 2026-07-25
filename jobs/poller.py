@@ -106,7 +106,7 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                 or "PENDING"
             )
             payment_status = str(raw_status).strip().upper()
-            logger.info("Poller check %s: raw=%s parsed=%s keys=%s", order_id, raw_status, payment_status, list(data.keys()))
+            logger.debug("Poller check %s: raw=%s parsed=%s keys=%s", order_id, raw_status, payment_status, list(data.keys()))
         except klikqris.KlikQRISError as e:
             logger.warning("Check status %s failed: %s", order_id, e)
             continue
