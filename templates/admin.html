@@ -8,7 +8,8 @@
     <link rel="icon" type="image/png" href="/assets/viintools_bot.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --bg-body: #0b0f19;
@@ -627,12 +628,12 @@
 
         <!-- NAVIGATION TABS -->
         <div class="nav-tabs">
-            <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard</button>
-            <button class="tab-btn" onclick="switchTab('products')">📦 Produk</button>
-            <button class="tab-btn" onclick="switchTab('stock')">📥 Stok Akun</button>
-            <button class="tab-btn" onclick="switchTab('orders')">📋 Transaksi & Pesanan</button>
-            <button class="tab-btn" onclick="switchTab('broadcast')">📣 Broadcast</button>
-            <button class="tab-btn" onclick="switchTab('admins')">⚙️ Pengaturan Admin</button>
+            <button class="tab-btn active" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i> Dashboard</button>
+            <button class="tab-btn" onclick="switchTab('products')"><i class="fa-solid fa-box"></i> Produk</button>
+            <button class="tab-btn" onclick="switchTab('stock')"><i class="fa-solid fa-file-arrow-up"></i> Stok Akun</button>
+            <button class="tab-btn" onclick="switchTab('orders')"><i class="fa-solid fa-receipt"></i> Transaksi & Pesanan</button>
+            <button class="tab-btn" onclick="switchTab('broadcast')"><i class="fa-solid fa-bullhorn"></i> Broadcast</button>
+            <button class="tab-btn" onclick="switchTab('admins')"><i class="fa-solid fa-sliders"></i> Pengaturan Admin</button>
         </div>
 
         <!-- MAIN CONTAINER -->
@@ -642,8 +643,8 @@
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-header">
-                            <span>TOTAL OMSET KESELURUHAN</span>
-                            <div class="stat-icon">💰</div>
+                            <span>TOTAL OMSET</span>
+                            <div class="stat-icon"><i class="fa-solid fa-wallet"></i></div>
                         </div>
                         <div class="stat-value" id="stat-total-rev">Rp 0</div>
                         <div class="stat-sub" id="stat-today-rev">Hari ini: Rp 0</div>
@@ -652,7 +653,7 @@
                     <div class="stat-card">
                         <div class="stat-header">
                             <span>READY STOCK</span>
-                            <div class="stat-icon">📦</div>
+                            <div class="stat-icon green"><i class="fa-solid fa-cubes"></i></div>
                         </div>
                         <div class="stat-value" id="stat-ready-stock">0</div>
                         <div class="stat-sub">Akun siap jual</div>
@@ -661,7 +662,7 @@
                     <div class="stat-card">
                         <div class="stat-header">
                             <span>PESANAN PENDING</span>
-                            <div class="stat-icon">⏳</div>
+                            <div class="stat-icon amber"><i class="fa-solid fa-hourglass-half"></i></div>
                         </div>
                         <div class="stat-value" id="stat-pending-orders" style="color: var(--warning);">0</div>
                         <div class="stat-sub">Perlu verifikasi</div>
@@ -670,7 +671,7 @@
                     <div class="stat-card">
                         <div class="stat-header">
                             <span>TOTAL USER BOT</span>
-                            <div class="stat-icon">👥</div>
+                            <div class="stat-icon purple"><i class="fa-solid fa-users"></i></div>
                         </div>
                         <div class="stat-value" id="stat-total-users">0</div>
                         <div class="stat-sub">Pengguna terdaftar</div>
@@ -681,23 +682,23 @@
                 <div class="grid-2">
                     <div class="section-card">
                         <div class="section-header">
-                            <span class="section-title">📊 Rincian Keuangan</span>
+                            <span class="section-title"><i class="fa-solid fa-chart-line" style="color: var(--primary);"></i> Rincian Keuangan</span>
                         </div>
                         <table style="width: 100%;">
                             <tr>
-                                <td>📅 Hari Ini</td>
+                                <td><i class="fa-solid fa-calendar-day" style="color: var(--text-muted); margin-right: 8px;"></i> Hari Ini</td>
                                 <td style="text-align: right; font-weight: 700;" id="fin-today">Rp 0</td>
                             </tr>
                             <tr>
-                                <td>📆 7 Hari Terakhir</td>
+                                <td><i class="fa-solid fa-calendar-week" style="color: var(--text-muted); margin-right: 8px;"></i> 7 Hari Terakhir</td>
                                 <td style="text-align: right; font-weight: 700;" id="fin-week">Rp 0</td>
                             </tr>
                             <tr>
-                                <td>🗓️ 30 Hari Terakhir</td>
+                                <td><i class="fa-solid fa-calendar-days" style="color: var(--text-muted); margin-right: 8px;"></i> 30 Hari Terakhir</td>
                                 <td style="text-align: right; font-weight: 700;" id="fin-month">Rp 0</td>
                             </tr>
                             <tr>
-                                <td>🏆 Produk Terlaris</td>
+                                <td><i class="fa-solid fa-trophy" style="color: var(--warning); margin-right: 8px;"></i> Produk Terlaris</td>
                                 <td style="text-align: right; font-weight: 600; color: var(--primary);" id="fin-best">-
                                 </td>
                             </tr>
@@ -706,15 +707,12 @@
 
                     <div class="section-card">
                         <div class="section-header">
-                            <span class="section-title">⚡ Aksi Cepat</span>
+                            <span class="section-title"><i class="fa-solid fa-bolt-lightning" style="color: var(--warning);"></i> Aksi Cepat</span>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <button class="btn btn-outline" onclick="openAddProductModal()">➕ Tambah Produk
-                                Baru</button>
-                            <button class="btn btn-outline" onclick="switchTab('stock')">📥 Input Stok Akun
-                                Bulk</button>
-                            <button class="btn btn-outline" onclick="switchTab('orders')">🔍 Cari / Approve
-                                Pesanan</button>
+                            <button class="btn btn-outline" onclick="openAddProductModal()"><i class="fa-solid fa-plus"></i> Tambah Produk Baru</button>
+                            <button class="btn btn-outline" onclick="switchTab('stock')"><i class="fa-solid fa-file-import"></i> Input Stok Akun Bulk</button>
+                            <button class="btn btn-outline" onclick="switchTab('orders')"><i class="fa-solid fa-magnifying-glass"></i> Cari / Approve Pesanan</button>
                         </div>
                     </div>
                 </div>
@@ -722,8 +720,8 @@
                 <!-- RECENT TRANSACTIONS -->
                 <div class="section-card">
                     <div class="section-header">
-                        <span class="section-title">📋 Transaksi Terbaru</span>
-                        <button class="btn btn-sm btn-outline" onclick="loadDashboard()">🔄 Refresh</button>
+                        <span class="section-title"><i class="fa-solid fa-clock-rotate-left"></i> Transaksi Terbaru</span>
+                        <button class="btn btn-sm btn-outline" onclick="loadDashboard()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -751,8 +749,8 @@
             <div id="tab-products" class="tab-content">
                 <div class="section-card">
                     <div class="section-header">
-                        <span class="section-title">📦 Manajemen Produk</span>
-                        <button class="btn btn-sm" onclick="openAddProductModal()">➕ Tambah Produk Baru</button>
+                        <span class="section-title"><i class="fa-solid fa-boxes-stacked"></i> Manajemen Produk</span>
+                        <button class="btn btn-sm" onclick="openAddProductModal()"><i class="fa-solid fa-plus"></i> Tambah Produk Baru</button>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -782,28 +780,28 @@
                 <div class="grid-2">
                     <div class="section-card">
                         <div class="section-header">
-                            <span class="section-title">📥 Input Stok Massal</span>
+                            <span class="section-title"><i class="fa-solid fa-file-circle-plus"></i> Input Stok Massal</span>
                         </div>
                         <form id="add-stock-form">
                             <div class="form-group">
-                                <label>Pilih Produk Target</label>
+                                <label><i class="fa-solid fa-box-open"></i> Pilih Produk Target</label>
                                 <select id="stock-product-select" class="form-control" required></select>
                             </div>
                             <div class="form-group">
-                                <label>Paste Data Akun (1 baris per akun: <code>email:password</code>)</label>
+                                <label><i class="fa-solid fa-align-left"></i> Paste Data Akun (1 baris per akun: <code>email:password</code>)</label>
                                 <textarea id="stock-text-input" class="form-control"
                                     placeholder="user1@gmail.com:pass123&#10;user2@gmail.com:pass456"
                                     required></textarea>
                             </div>
-                            <button type="submit" class="btn btn-success">📥 Simpan & Tambahkan Stok</button>
+                            <button type="submit" class="btn btn-success"><i class="fa-solid fa-download"></i> Simpan & Tambahkan Stok</button>
                         </form>
                     </div>
 
                     <div class="section-card">
                         <div class="section-header">
-                            <span class="section-title">📤 Export Stok Produk</span>
+                            <span class="section-title"><i class="fa-solid fa-file-export"></i> Export Stok Produk</span>
                         </div>
-                        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+                        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
                             Unduh seluruh berkas akun ready stock dalam format file teks (<code>.txt</code>) per produk.
                         </p>
                         <div id="export-stock-list" style="display: flex; flex-direction: column; gap: 12px;">
@@ -817,12 +815,12 @@
             <div id="tab-orders" class="tab-content">
                 <div class="section-card">
                     <div class="section-header">
-                        <span class="section-title">📋 Manajemen & Pencarian Transaksi</span>
+                        <span class="section-title"><i class="fa-solid fa-receipt"></i> Manajemen & Pencarian Transaksi</span>
                         <div style="display: flex; gap: 10px;">
                             <input type="text" id="order-search-input" class="form-control" style="width: 250px;"
                                 placeholder="Cari Order ID / User ID..."
                                 onkeyup="if(event.key==='Enter') searchOrders()">
-                            <button class="btn btn-sm" onclick="searchOrders()">🔍 Cari</button>
+                            <button class="btn btn-sm" onclick="searchOrders()"><i class="fa-solid fa-magnifying-glass"></i> Cari</button>
                         </div>
                     </div>
                     <div class="table-responsive">
@@ -853,16 +851,16 @@
             <div id="tab-broadcast" class="tab-content">
                 <div class="section-card" style="max-width: 600px; margin: 0 auto;">
                     <div class="section-header">
-                        <span class="section-title">📣 Kirim Pesan Broadcast</span>
+                        <span class="section-title"><i class="fa-solid fa-paper-plane"></i> Kirim Pesan Broadcast</span>
                     </div>
                     <form id="broadcast-form">
                         <div class="form-group">
-                            <label>Isi Pesan (Format Markdown Telegram)</label>
+                            <label><i class="fa-solid fa-message"></i> Isi Pesan (Format Markdown Telegram)</label>
                             <textarea id="broadcast-text" class="form-control"
-                                placeholder="⚡ PROMO SPESIAL HARI INI!&#10;&#10;Gunakan kode promo untuk potongan harga..."
+                                placeholder="PROMO SPESIAL HARI INI!&#10;&#10;Gunakan kode promo untuk potongan harga..."
                                 required style="min-height: 180px;"></textarea>
                         </div>
-                        <button type="submit" class="btn">🚀 Kirim Broadcast ke Semua User</button>
+                        <button type="submit" class="btn"><i class="fa-solid fa-paper-plane"></i> Kirim Broadcast ke Semua User</button>
                     </form>
                 </div>
             </div>
@@ -872,7 +870,7 @@
                 <div class="grid-2">
                     <div class="section-card">
                         <div class="section-header">
-                            <span class="section-title">👥 Daftar Admin Telegram</span>
+                            <span class="section-title"><i class="fa-solid fa-user-shield"></i> Daftar Admin Telegram</span>
                         </div>
                         <div id="admin-list-container"
                             style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
@@ -880,14 +878,13 @@
                         <form id="add-admin-form" style="display: flex; gap: 10px;">
                             <input type="number" id="new-admin-uid" class="form-control"
                                 placeholder="Masukkan Telegram User ID..." required>
-                            <button type="submit" class="btn btn-sm" style="width: auto; white-space: nowrap;">➕
-                                Tambah</button>
+                            <button type="submit" class="btn btn-sm" style="width: auto; white-space: nowrap;"><i class="fa-solid fa-user-plus"></i> Tambah</button>
                         </form>
                     </div>
 
                     <div class="section-card">
                         <div class="section-header">
-                            <span class="section-title">⚙️ Informasi Sistem Bot</span>
+                            <span class="section-title"><i class="fa-solid fa-server"></i> Informasi Sistem Bot</span>
                         </div>
                         <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
                             Web Panel Admin terhubung langsung ke SQLite database (<code>bot.db</code>). Seluruh
