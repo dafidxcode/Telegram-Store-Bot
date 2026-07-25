@@ -58,3 +58,7 @@ if _extra_admins:
         _id = _id.strip()
         if _id.isdigit():
             ADMIN_IDS.add(int(_id))
+
+# Maintenance mode state
+MAINTENANCE_MODE: bool = False
+

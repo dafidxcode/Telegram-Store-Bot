@@ -78,11 +78,11 @@ async def handle_quick_addproduct(update: Update, context: ContextTypes.DEFAULT_
 
     product_id = db.add_product(name=name, description=description, price=price)
     await message.reply_text(
-        f"*{t('admin_product_added', lang)}*\n\n"
-        f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
-        f"📦 {t('admin_name', lang)}: *{name}*\n"
-        f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
-        f"📝 {t('admin_description', lang)}: {description or '-'}",
+        f"{t('admin_product_added', lang)}\n\n"
+        f"{t('admin_id', lang)}: `{product_id}`\n"
+        f"{t('admin_name', lang)}: *{name}*\n"
+        f"{t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
+        f"{t('admin_description', lang)}: {description or '-'}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
     )
@@ -139,7 +139,7 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         context.user_data["admin_state"] = "addproduct_price"
         context.user_data["addproduct_name"] = name
         await message.reply_text(
-            f"📦 {t('admin_product_name', lang)}: *{name}*\n\n{t('admin_send_price', lang)}",
+            f"{t('admin_product_name', lang)}: *{name}*\n\n{t('admin_send_price', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
         )
@@ -160,7 +160,7 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         context.user_data["admin_state"] = "addproduct_desc"
         context.user_data["addproduct_price"] = price
         await message.reply_text(
-            f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n\n{t('admin_send_desc', lang)}",
+            f"{t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n\n{t('admin_send_desc', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
         )
@@ -183,11 +183,11 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
 
         product_id = db.add_product(name=name, description=desc, price=price)
         await message.reply_text(
-            f"*{t('admin_product_added', lang)}*\n\n"
-            f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
-            f"📦 {t('admin_name', lang)}: *{escape_md(name)}*\n"
-            f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
-            f"📝 {t('admin_description', lang)}: {desc or '-'}",
+            f"{t('admin_product_added', lang)}\n\n"
+            f"{t('admin_id', lang)}: `{product_id}`\n"
+            f"{t('admin_name', lang)}: *{escape_md(name)}*\n"
+            f"{t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
+            f"{t('admin_description', lang)}: {desc or '-'}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
         )
@@ -212,8 +212,8 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
             product = db.get_product(product_id)
             product_name = escape_md(product["name"]) if product else "Unknown"
             await message.reply_text(
-                f"📦 {t('admin_name', lang)}: *{product_name}*\n"
-                f"💰 {t('admin_new_price', lang)}: *Rp {format_rupiah(new_price)}*",
+                f"{t('admin_name', lang)}: *{product_name}*\n"
+                f"{t('admin_new_price', lang)}: *Rp {format_rupiah(new_price)}*",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=_admin_back_keyboard(lang),
             )
@@ -244,9 +244,9 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
                 failed += 1
 
         await message.reply_text(
-            f"*{t('admin_broadcast_done', lang)}*\n\n"
-            f"📤 {t('admin_sent', lang)}: *{success}* {t('users', lang)}\n"
-            f"❌ {t('admin_failed', lang)}: *{failed}* {t('users', lang)}",
+            f"{t('admin_broadcast_done', lang)}\n\n"
+            f"{t('admin_sent', lang)}: *{success}* {t('users', lang)}\n"
+            f"{t('admin_failed', lang)}: *{failed}* {t('users', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
         )
@@ -271,11 +271,58 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
             return
         config.ADMIN_IDS.add(new_admin_id)
         await message.reply_text(
-            f"*{t('admin_added', lang)}*\n\n"
-            f"🆔 {t('admin_id', lang)}: `{new_admin_id}`\n"
-            f"👥 {t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
+            f"{t('admin_added', lang)}\n\n"
+            f"{t('admin_id', lang)}: `{new_admin_id}`\n"
+            f"{t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
+        )
+        return
+
+    if admin_state == "search_order":
+        message = update.message
+        if message is None or not message.text:
+            return
+        query_str = message.text.strip()
+        context.user_data.pop("admin_state", None)
+
+        orders = db.search_orders(query_str)
+        if not orders:
+            await message.reply_text(
+                f"🔍 Hasil Pencarian: *{escape_md(query_str)}*\n\n❌ Pesanan tidak ditemukan.",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=_admin_back_keyboard(lang),
+            )
+            return
+
+        lines = [f"🔍 Hasil Pencarian untuk *{escape_md(query_str)}* ({len(orders)} ditemukan):\n"]
+        buttons = []
+        for o in orders[:5]:
+            username = o.get("username") or "no_user"
+            status = o.get("status", "pending")
+            emoji = _STATUS_EMOJI.get(status, "⏳")
+            oid = o["id"]
+            product = db.get_product(o.get("product_id", 1))
+            product_name = escape_md(product["name"]) if product else "N/A"
+
+            lines.append(
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🆔 Pesanan: `{oid}`\n"
+                f"👤 Pembeli: @{username} (ID: `{o['user_id']}`)\n"
+                f"📦 Produk: *{product_name}*\n"
+                f"🔢 Jumlah: {o['quantity']} = Rp {format_rupiah(o['total'])}\n"
+                f"Status: {emoji} *{status.upper()}*\n"
+                f"📅 Waktu: {o['created_at']}"
+            )
+            if status == "pending":
+                buttons.append([InlineKeyboardButton(f"✅ Approve #{oid}", callback_data=f"admin:apv:{oid}")])
+
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")])
+
+        await message.reply_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup(buttons),
         )
         return
 
@@ -298,25 +345,25 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
 
         if count > 0:
             await message.reply_text(
-                f"*{t('admin_stock_added', lang, name=product_name)}*\n\n"
-                f"📥 {t('admin_added_count', lang)}: *{count}* {t('accounts', lang)}\n"
-                f"📦 {t('admin_product_stock', lang)}: *{stock}* {t('accounts', lang)}\n\n"
+                f"{t('admin_stock_added', lang, name=product_name)}\n\n"
+                f"{t('admin_added_count', lang)}: *{count}* {t('accounts', lang)}\n"
+                f"{t('admin_product_stock', lang)}: *{stock}* {t('accounts', lang)}\n\n"
                 f"{t('admin_send_more', lang)}",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"📥 {t('admin_add_more', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
+                    [InlineKeyboardButton(f"{t('admin_add_more', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
                     [InlineKeyboardButton(t("btn_back", lang), callback_data="admin:addstock")],
                     [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
                 ]),
             )
         else:
             await message.reply_text(
-                f"*{t('admin_stock_not_added', lang, name=product_name)}*\n\n"
+                f"{t('admin_stock_not_added', lang, name=product_name)}\n\n"
                 f"{t('admin_check_format', lang)}\n\n"
                 f"{t('admin_current_stock', lang)}: *{stock}* {t('accounts', lang)}",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"🔄 {t('admin_try_again', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
+                    [InlineKeyboardButton(f"{t('admin_try_again', lang)} — {product_name}", callback_data=f"admin:astk:{addstock_pid}")],
                     [InlineKeyboardButton(t("btn_back", lang), callback_data="admin:addstock")],
                     [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
                 ]),
@@ -369,11 +416,11 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     product_id = db.add_product(name=name, description=description, price=price)
     await update.message.reply_text(
-        f"*{t('admin_product_added', lang)}*\n\n"
-        f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
-        f"📦 {t('admin_name', lang)}: *{name}*\n"
-        f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
-        f"📝 {t('admin_description', lang)}: {description or '-'}",
+        f"{t('admin_product_added', lang)}\n\n"
+        f"{t('admin_id', lang)}: `{product_id}`\n"
+        f"{t('admin_name', lang)}: *{name}*\n"
+        f"{t('admin_price', lang)}: *Rp {format_rupiah(price)}*\n"
+        f"{t('admin_description', lang)}: {description or '-'}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
     )
@@ -434,11 +481,11 @@ async def cmd_editproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     updated = db.get_product(product_id)
     active_text = t("admin_active", lang) if updated['is_active'] else t("admin_inactive", lang)
     await update.message.reply_text(
-        f"*{t('admin_product_updated', lang)}*\n\n"
-        f"🆔 {t('admin_id', lang)}: `{product_id}`\n"
-        f"📦 {t('admin_name', lang)}: *{updated['name']}*\n"
-        f"💰 {t('admin_price', lang)}: *Rp {format_rupiah(updated['price'])}*\n"
-        f"📦 {t('admin_stock', lang)}: {updated['stock_type']} ({updated['stock_count']})\n"
+        f"{t('admin_product_updated', lang)}\n\n"
+        f"{t('admin_id', lang)}: `{product_id}`\n"
+        f"{t('admin_name', lang)}: *{updated['name']}*\n"
+        f"{t('admin_price', lang)}: *Rp {format_rupiah(updated['price'])}*\n"
+        f"{t('admin_stock', lang)}: {updated['stock_type']} ({updated['stock_count']})\n"
         f"{active_text}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
@@ -479,8 +526,8 @@ async def cmd_delproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     db.delete_product(product_id)
     await update.message.reply_text(
-        f"*{t('admin_product_deleted', lang)}*\n\n"
-        f"📦 {t('admin_name', lang)}: *{escape_md(product['name'])}*",
+        f"{t('admin_product_deleted', lang)}\n\n"
+        f"{t('admin_name', lang)}: *{escape_md(product['name'])}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
     )
@@ -497,20 +544,20 @@ async def cmd_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     products = db.get_all_products()
     if not products:
         await update.message.reply_text(
-            f"*{t('admin_product_list', lang)}*\n\n{t('no_products', lang)}",
+            f"{t('admin_product_list', lang)}\n\n{t('no_products', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
         )
         return
 
-    lines = [f"*{t('admin_product_list', lang)}*\n"]
-    for p in products:
+    lines = [f"{t('admin_product_list', lang)}\n"]
+    for i, p in enumerate(products, 1):
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
         status = "✅" if p["is_active"] else "❌"
         lines.append(
-            f"{status} #{p['id']} | *{escape_md(p['name'])}*\n"
-            f"   💰 {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
-            f"   📦 {t('admin_stock', lang)}: {stock}\n"
+            f"{status} #{i} | *{escape_md(p['name'])}*\n"
+            f"   {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
+            f"   {t('admin_stock', lang)}: {stock}\n"
         )
 
     await update.message.reply_text(
@@ -549,13 +596,13 @@ async def cmd_addstock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     for p in products:
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
         buttons.append([InlineKeyboardButton(
-            f"📦 {p['name']} ({t('admin_stock', lang)}: {stock})",
+            f"📦 {p['name']} ({t('admin_stock', lang).lstrip('📦 ')}: {stock})",
             callback_data=f"admin:astk:{p['id']}",
         )])
     buttons.append([InlineKeyboardButton(t("btn_back_to_admin", lang), callback_data="menu:admin")])
 
     await message.reply_text(
-        f"*{t('admin_add_stock', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n{t('admin_select_stock_product', lang)}",
+        f"{t('admin_add_stock', lang)}\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n{t('admin_select_stock_product', lang)}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -574,7 +621,7 @@ async def cmd_addstock_txt(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     lang = get_lang(context, user_id)
 
     await message.reply_text(
-        f"*{t('admin_add_stock', lang)}*\n\n"
+        f"{t('admin_add_stock', lang)}\n\n"
         f"{t('admin_method1', lang)}\n\n"
         f"{t('admin_method2', lang)}",
         parse_mode=ParseMode.MARKDOWN,
@@ -620,10 +667,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if count > 0:
         await message.reply_text(
-            f"*{t('admin_stock_file_added', lang)}*\n\n"
-            f"📦 {t('admin_name', lang)}: *{product_label}*\n"
-            f"📥 {t('admin_added_count', lang)}: *{count}* {t('accounts', lang)}\n"
-            f"📦 {t('admin_stock', lang)}: *{stock}* {t('accounts', lang)}",
+            f"{t('admin_stock_file_added', lang)}\n\n"
+            f"{t('admin_name', lang)}: *{product_label}*\n"
+            f"{t('admin_added_count', lang)}: *{count}* {t('accounts', lang)}\n"
+            f"{t('admin_stock', lang)}: *{stock}* {t('accounts', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
         )
@@ -648,14 +695,14 @@ async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     products = db.get_active_products()
 
     text = (
-        f"*{t('admin_stock_info', lang)}*\n"
+        f"{t('admin_stock_info', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 {t('admin_total_ready', lang)}: *{total_stock}* {t('accounts', lang)}\n"
-        f"⏳ {t('admin_pending_orders', lang)}: *{pending}*\n"
+        f"{t('admin_total_ready', lang)}: *{total_stock}* {t('accounts', lang)}\n"
+        f"{t('admin_pending_orders', lang)}: *{pending}*\n"
     )
-    for p in products:
+    for i, p in enumerate(products, 1):
         p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-        text += f"\n#{p['id']} {escape_md(p['name'])}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
+        text += f"\n#{i} {escape_md(p['name'])}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
 
     await update.message.reply_text(
         text,
@@ -687,13 +734,13 @@ async def cmd_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     if not orders:
         await message.reply_text(
-            f"*{t('admin_recent_orders', lang)}*\n\n{t('no_products', lang)}",
+            f"{t('admin_recent_orders', lang)}\n\n{t('no_products', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
         )
         return
 
-    lines = [f"*{t('admin_recent_orders', lang)}* ({len(orders)})\n"]
+    lines = [f"{t('admin_recent_orders', lang)} ({len(orders)})\n"]
 
     for o in orders:
         username = o.get("username") or "no_user"
@@ -736,7 +783,7 @@ async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     args = context.args or []
     if len(args) < 2:
         await update.message.reply_text(
-            f"*{t('admin_change_price', lang)}*\n\n"
+            f"{t('admin_change_price', lang)}\n\n"
             f"{t('cmd_setprice_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
@@ -771,9 +818,9 @@ async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db.update_product(product_id, price=new_price)
     updated = db.get_product(product_id)
     await update.message.reply_text(
-        f"*{t('admin_price_updated', lang)}*\n\n"
-        f"📦 {t('admin_name', lang)}: *{updated['name']}*\n"
-        f"💰 {t('admin_new_price', lang)}: *Rp {new_price:,}/{t('accounts', lang)}*",
+        f"{t('admin_price_updated', lang)}\n\n"
+        f"{t('admin_name', lang)}: *{updated['name']}*\n"
+        f"{t('admin_new_price', lang)}: *Rp {new_price:,}/{t('accounts', lang)}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
     )
@@ -794,7 +841,7 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     broadcast_text = " ".join(context.args or []).strip()
     if not broadcast_text:
         await message.reply_text(
-            f"*{t('admin_broadcast', lang)}*\n\n"
+            f"{t('admin_broadcast', lang)}\n\n"
             f"{t('cmd_broadcast_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
@@ -818,9 +865,9 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             failed += 1
 
     await message.reply_text(
-        f"*{t('admin_broadcast_done', lang)}*\n\n"
-        f"📤 {t('admin_sent', lang)}: *{success}* {t('users', lang)}\n"
-        f"❌ {t('admin_failed', lang)}: *{failed}* {t('users', lang)}",
+        f"{t('admin_broadcast_done', lang)}\n\n"
+        f"{t('admin_sent', lang)}: *{success}* {t('users', lang)}\n"
+        f"{t('admin_failed', lang)}: *{failed}* {t('users', lang)}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
     )
@@ -841,7 +888,7 @@ async def cmd_addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     args = context.args or []
     if not args:
         await message.reply_text(
-            f"*{t('admin_add_admin', lang)}*\n\n"
+            f"{t('admin_add_admin', lang)}\n\n"
             f"{t('cmd_addadmin_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
@@ -864,9 +911,9 @@ async def cmd_addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     config.ADMIN_IDS.add(new_admin_id)
     await update.message.reply_text(
-        f"*{t('admin_added', lang)}*\n\n"
-        f"🆔 {t('admin_id', lang)}: `{new_admin_id}`\n"
-        f"👥 {t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
+        f"{t('admin_added', lang)}\n\n"
+        f"{t('admin_id', lang)}: `{new_admin_id}`\n"
+        f"{t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
     )
@@ -887,7 +934,7 @@ async def cmd_removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     args = context.args or []
     if not args:
         await message.reply_text(
-            f"*{t('admin_remove_admin', lang)}*\n\n"
+            f"{t('admin_remove_admin', lang)}\n\n"
             f"{t('cmd_removeadmin_usage', lang)}",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=_admin_back_keyboard(lang),
@@ -914,9 +961,9 @@ async def cmd_removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     config.ADMIN_IDS.discard(remove_id)
     await update.message.reply_text(
-        f"*{t('admin_removed', lang)}*\n\n"
-        f"🆔 {t('admin_id', lang)}: `{remove_id}`\n"
-        f"👥 {t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
+        f"{t('admin_removed', lang)}\n\n"
+        f"{t('admin_id', lang)}: `{remove_id}`\n"
+        f"{t('admin_total_admins', lang)}: *{len(config.ADMIN_IDS)}*",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_admin_back_keyboard(lang),
     )
@@ -930,7 +977,7 @@ async def cmd_adminlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_id = update.effective_user.id if update.effective_user else 0
     lang = get_lang(context, user_id)
 
-    lines = [f"*{t('admin_list_title', lang)}*\n"]
+    lines = [f"{t('admin_list_title', lang)}\n"]
     for i, aid in enumerate(sorted(config.ADMIN_IDS), 1):
         is_main = " ⭐" if aid == config.ADMIN_USER_ID else ""
         lines.append(f"{i}. `{aid}`{is_main}")

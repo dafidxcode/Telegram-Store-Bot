@@ -196,13 +196,13 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     # --- Fallback: text only ---
     if sent_msg is None:
         text = (
-            f"*✅ {t('order_created', lang)}*\n"
+            f"{t('order_created', lang)}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: `{order_id}`\n"
-            f"📦 {t('product_label', lang)}: *{escape_md(product['name'])}*\n"
+            f"{t('product_label', lang)}: *{escape_md(product['name'])}*\n"
             f"🔢 {t('quantity_label', lang)}: *{quantity}* {t('accounts_label', lang)}\n"
             f"💰 Total: *Rp {format_rupiah(qris_nominal)}*\n"
-            f"⏳ {t('status_label', lang)}: *{api_status}*\n"
+            f"{t('status_label', lang)}: *{api_status}*\n"
             f"⏰ {t('expires_label', lang)}: *{api_expired_at}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{t('qr_processing', lang)}"
@@ -326,14 +326,16 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     buttons = []
     for p in products:
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+        p_name = escape_md(p['name'])
+        btn_title = p_name if p_name.startswith(("🛒", "🛍️", "📦")) else f"🛒 {p_name}"
         buttons.append([InlineKeyboardButton(
-            f"🛒 {escape_md(p['name'])} - Rp {format_rupiah(p['price'])} (📦 {stock})",
+            f"{btn_title} - Rp {format_rupiah(p['price'])} (📦 {stock})",
             callback_data=f"buy:{p['id']}",
         )])
     buttons.append([InlineKeyboardButton(t("cancel", lang), callback_data="buy:cancel")])
 
     await message.reply_text(
-        f"*{t('select_product_title', lang)}*\n\n{t('choose_product', lang)}",
+        f"{t('select_product_title', lang)}\n\n{t('choose_product', lang)}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -391,15 +393,15 @@ async def _show_product_detail(query, product, qty, stock, lang="en"):
     text = (
         f"*{escape_md(product['name'])}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*{t('product_details', lang)}*\n"
+        f"{t('product_details', lang)}\n"
         f"{detail_text}"
-        f"*{t('pricing', lang)}*\n"
+        f"{t('pricing', lang)}\n"
         f"{t('pricing_per_account', lang, price=price_str)}\n\n"
-        f"*{t('stock_heading', lang)}*\n"
+        f"{t('stock_heading', lang)}\n"
         f"• {t('available', lang)} : {stock_text}\n"
         f"• {t('minimum', lang)}   : 1 {t('accounts', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*{t('your_order', lang)}*\n"
+        f"{t('your_order', lang)}\n"
         f"{t('quantity', lang)}    : {qty} {t('accounts', lang)}\n"
         f"{t('price', lang)}       : Rp {price_str}\n"
         f"{t('total', lang)}       : Rp {format_rupiah(total)}\n"
@@ -445,7 +447,7 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
         qty = min(qty + 1, max_qty)
     elif action == "input":
         await query.edit_message_text(
-            f"*{t('enter_quantity_title', lang)}*\n\n"
+            f"{t('enter_quantity_title', lang)}\n\n"
             f"{t('product_label', lang)}: *{escape_md(product['name'])}*\n"
             f"{t('price', lang)}: *Rp {format_rupiah(product['price'])}/{t('accounts', lang)}*\n"
             f"{t('stock', lang)}: *{stock if stock else '∞'}*\n\n"
@@ -529,9 +531,9 @@ async def _show_confirm(query, context, product, qty):
     total = product["price"] * qty
 
     text = (
-        f"*{t('order_confirmation', lang)}*\n"
+        f"{t('order_confirmation', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 {t('product_label', lang)}: *{escape_md(product['name'])}*\n"
+        f"{t('product_label', lang)}: *{escape_md(product['name'])}*\n"
         f"🔢 {t('quantity_label', lang)}: *{qty}* {t('accounts_label', lang)}\n"
         f"💰 {t('price', lang)}: Rp {format_rupiah(product['price'])}/{t('accounts', lang)}\n"
         f"💵 {t('total', lang)}: *Rp {format_rupiah(total)}*\n"
@@ -650,7 +652,7 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             lines.append(
                 f"📋 {oid}\n"
-                f"📦 {t('product_label', lang)}: {product_name}\n"
+                f"{t('product_label', lang)}: {product_name}\n"
                 f"🔢 {t('quantity_label', lang)}: {qty} {t('accounts_label', lang)}\n"
                 f"💰 Total: Rp {format_rupiah(total)}\n"
                 f"{t('status_label_header', lang)}: {emoji} {status}\n"
@@ -663,7 +665,7 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         ])
 
         await update.message.reply_text(
-            f"*{t('order_history', lang)}*\n\n" + "\n".join(lines),
+            f"{t('order_history', lang)}\n\n" + "\n".join(lines),
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=keyboard,
         )

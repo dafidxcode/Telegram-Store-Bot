@@ -447,3 +447,84 @@ def get_all_user_ids() -> list[int]:
     assert _conn is not None
     rows = _conn.execute("SELECT user_id FROM users").fetchall()
     return [int(row["user_id"]) for row in rows]
+
+
+def get_financial_report() -> dict:
+    """Calculate sales revenue metrics (today, 7 days, 30 days, total all time, best seller)."""
+    assert _conn is not None
+
+    today_row = _conn.execute(
+        "SELECT COALESCE(SUM(total), 0) as rev, COUNT(*) as cnt FROM orders WHERE status = 'paid' AND date(paid_at) = date('now')"
+    ).fetchone()
+
+    week_row = _conn.execute(
+        "SELECT COALESCE(SUM(total), 0) as rev, COUNT(*) as cnt FROM orders WHERE status = 'paid' AND paid_at >= datetime('now', '-7 days')"
+    ).fetchone()
+
+    month_row = _conn.execute(
+        "SELECT COALESCE(SUM(total), 0) as rev, COUNT(*) as cnt FROM orders WHERE status = 'paid' AND paid_at >= datetime('now', '-30 days')"
+    ).fetchone()
+
+    total_row = _conn.execute(
+        "SELECT COALESCE(SUM(total), 0) as rev, COUNT(*) as cnt FROM orders WHERE status = 'paid'"
+    ).fetchone()
+
+    best_row = _conn.execute(
+        """SELECT p.name, SUM(o.quantity) as total_qty, COUNT(o.id) as order_count
+           FROM orders o
+           JOIN products p ON o.product_id = p.id
+           WHERE o.status = 'paid'
+           GROUP BY o.product_id
+           ORDER BY total_qty DESC LIMIT 1"""
+    ).fetchone()
+
+    best_product = _row_to_dict(best_row) if best_row else None
+
+    return {
+        "today_revenue": today_row["rev"] if today_row else 0,
+        "today_orders": today_row["cnt"] if today_row else 0,
+        "week_revenue": week_row["rev"] if week_row else 0,
+        "week_orders": week_row["cnt"] if week_row else 0,
+        "month_revenue": month_row["rev"] if month_row else 0,
+        "month_orders": month_row["cnt"] if month_row else 0,
+        "total_revenue": total_row["rev"] if total_row else 0,
+        "total_orders": total_row["cnt"] if total_row else 0,
+        "best_product": best_product,
+    }
+
+
+def get_stock_file_content(product_id: int) -> str:
+    """Get ready stock lines for export as text file."""
+    assert _conn is not None
+    rows = _conn.execute(
+        "SELECT email, password, balance FROM stock WHERE product_id = ? AND status = 'ready' ORDER BY id ASC",
+        (product_id,),
+    ).fetchall()
+    lines = []
+    for r in rows:
+        if r["balance"]:
+            lines.append(f"{r['email']}:{r['password']}:{r['balance']}")
+        elif r["password"]:
+            lines.append(f"{r['email']}:{r['password']}")
+        else:
+            lines.append(r["email"])
+    return "\n".join(lines)
+
+
+def search_orders(query: str) -> list[dict]:
+    """Search orders by order ID (partial/exact) or Telegram user_id / username."""
+    assert _conn is not None
+    query = query.strip()
+    if query.isdigit():
+        rows = _conn.execute(
+            "SELECT * FROM orders WHERE user_id = ? OR id = ? ORDER BY created_at DESC LIMIT 20",
+            (int(query), query),
+        ).fetchall()
+    else:
+        clean_q = query.lstrip("@")
+        rows = _conn.execute(
+            "SELECT * FROM orders WHERE id LIKE ? OR username LIKE ? ORDER BY created_at DESC LIMIT 20",
+            (f"%{query}%", f"%{clean_q}%"),
+        ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+

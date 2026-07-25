@@ -280,10 +280,10 @@ async def klikqris_webhook(request: Request):
                         caption = (
                             f"{t('payment_success', user_lang)}\n"
                             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"🆔 {t('order_label', user_lang)}: #{order_id}\n"
-                            f"📦 {t('product_label', user_lang)}: {escape_md(product_name)}\n"
-                            f"🔢 {t('quantity_label_short', user_lang)}: {quantity} {t('accounts', user_lang)}\n"
-                            f"💰 {t('total_label', user_lang)}: Rp {format_rupiah(order.get('total', 0))}\n"
+                            f"{t('order_label', user_lang)}: #{order_id}\n"
+                            f"{t('product_label', user_lang)}: {escape_md(product_name)}\n"
+                            f"{t('quantity_label_short', user_lang)}: {quantity} {t('accounts', user_lang)}\n"
+                            f"{t('total_label', user_lang)}: Rp {format_rupiah(order.get('total', 0))}\n"
                             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                             f"{t('file_attached', user_lang)}"
                         )
