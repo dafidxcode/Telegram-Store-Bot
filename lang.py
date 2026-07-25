@@ -189,6 +189,13 @@ T = {
     "admin_search_order_prompt":    {"en": "Please send Order ID or Telegram User ID to search:", "id": "Kirimkan ID Pesanan (Order ID) atau Telegram User ID untuk mencari:"},
     "maintenance_mode_alert":       {"en": "⚠️ Bot is currently undergoing maintenance. Please try again later.", "id": "⚠️ Bot sedang dalam pemeliharaan/restock. Silakan coba lagi nanti."},
 
+    # Product edit feature
+    "admin_edit_product_title":     {"en": "*✏️ EDIT PRODUCT*",     "id": "*✏️ EDIT PRODUK*"},
+    "admin_edit_select_prompt":     {"en": "Select a product to edit:", "id": "Pilih produk yang ingin diubah:"},
+    "admin_send_new_name":          {"en": "Please send new name for product *{name}*:", "id": "Kirimkan nama baru untuk produk *{name}*:"},
+    "admin_send_new_desc":          {"en": "Please send new description for product *{name}* (send `-` for empty):", "id": "Kirimkan deskripsi baru untuk produk *{name}* (kirim `-` jika tanpa deskripsi):"},
+    "admin_send_new_price":         {"en": "Please send new price (in IDR) for product *{name}*:", "id": "Kirimkan harga baru (dalam Rupiah) untuk produk *{name}*:"},
+
     # Admin — product list
     "admin_product_list":   {"en": "*📦 PRODUCT LIST*",     "id": "*📦 DAFTAR PRODUK*"},
     "admin_no_products":    {"en": "*📦 Product List*\n\nNo products yet.", "id": "*📦 Daftar Produk*\n\nBelum ada produk."},

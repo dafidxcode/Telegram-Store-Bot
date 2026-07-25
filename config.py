@@ -27,9 +27,9 @@ def _require_int_env(key: str) -> int:
 
 BOT_TOKEN: str = _require_env("TELEGRAM_BOT_TOKEN")
 ADMIN_USER_ID: int = _require_int_env("ADMIN_USER_ID")
-HARGA_PER_AKUN: int = _require_int_env("HARGA_PER_AKUN")
+ADMIN_AUTH: str = os.getenv("ADMIN_AUTH", "Abgbunda21").strip()
 
-SHOP_NAME: str = os.getenv("SHOP_NAME", "SWD x Videogen")
+SHOP_NAME: str = os.getenv("SHOP_NAME", "Viintools")
 DB_PATH: str = os.getenv("DB_PATH", "/app/data/bot.db")
 
 KLIKQRIS_API_KEY: str = os.getenv("KLIKQRIS_API_KEY", "").strip()

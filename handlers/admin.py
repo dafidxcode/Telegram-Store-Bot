@@ -15,7 +15,7 @@ from telegram.ext import (
 
 import config
 import db
-from handlers.start import btn_home, escape_md, get_lang, t, format_rupiah
+from handlers.start import btn_home, escape_md, get_lang, t, format_rupiah, get_num_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +326,72 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         )
         return
 
+    if admin_state == "editproduct_name":
+        message = update.message
+        if message is None or not message.text:
+            return
+        new_name = message.text.strip()
+        pid = context.user_data.pop("editproduct_id", None)
+        context.user_data.pop("admin_state", None)
+        if pid and new_name:
+            db.update_product(pid, name=new_name)
+            await message.reply_text(
+                f"✅ Nama produk berhasil diubah menjadi: *{escape_md(new_name)}*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✏️ Kembali ke Edit Produk", callback_data=f"admin:edetail:{pid}")],
+                    [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
+                ]),
+            )
+        return
+
+    if admin_state == "editproduct_desc":
+        message = update.message
+        if message is None or not message.text:
+            return
+        new_desc = message.text.strip()
+        if new_desc == "-":
+            new_desc = ""
+        pid = context.user_data.pop("editproduct_id", None)
+        context.user_data.pop("admin_state", None)
+        if pid is not None:
+            db.update_product(pid, description=new_desc)
+            await message.reply_text(
+                f"✅ Deskripsi produk berhasil diubah!",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✏️ Kembali ke Edit Produk", callback_data=f"admin:edetail:{pid}")],
+                    [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
+                ]),
+            )
+        return
+
+    if admin_state == "editproduct_price":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            new_price = int(message.text.strip().replace(".", "").replace(",", ""))
+        except ValueError:
+            await message.reply_text(t("admin_price_number", lang))
+            return
+        if new_price <= 0:
+            await message.reply_text(t("admin_price_positive", lang))
+            return
+        pid = context.user_data.pop("editproduct_id", None)
+        context.user_data.pop("admin_state", None)
+        if pid is not None:
+            db.update_product(pid, price=new_price)
+            await message.reply_text(
+                f"✅ Harga produk berhasil diubah menjadi: *Rp {format_rupiah(new_price)}*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✏️ Kembali ke Edit Produk", callback_data=f"admin:edetail:{pid}")],
+                    [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
+                ]),
+            )
+        return
+
     # Handle addstock mode
     addstock_pid = context.user_data.get("addstock_product_id")
     if addstock_pid:
@@ -555,7 +621,7 @@ async def cmd_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
         status = "✅" if p["is_active"] else "❌"
         lines.append(
-            f"{status} #{i} | *{escape_md(p['name'])}*\n"
+            f"{status} {get_num_emoji(i)} | *{escape_md(p['name'])}*\n"
             f"   {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
             f"   {t('admin_stock', lang)}: {stock}\n"
         )
@@ -702,7 +768,7 @@ async def cmd_stockinfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
     for i, p in enumerate(products, 1):
         p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-        text += f"\n#{i} {escape_md(p['name'])}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
+        text += f"\n{get_num_emoji(i)} {escape_md(p['name'])}: *{p_stock}* | Rp {format_rupiah(p['price'])}"
 
     await update.message.reply_text(
         text,

@@ -35,7 +35,7 @@ def _start_webhook_server():
 def main():
     db.init_db(config.DB_PATH)
     logger.info("Database siap: %s", config.DB_PATH)
-    logger.info("Bot: @%s | Admin: %s | Harga: Rp %s/akun", config.SHOP_NAME, config.ADMIN_USER_ID, config.HARGA_PER_AKUN)
+    logger.info("Bot: @%s | Admin: %s", config.SHOP_NAME, config.ADMIN_USER_ID)
     logger.info("Admin IDs: %s", config.ADMIN_IDS)
 
     if config.KLIKQRIS_ACTIVE:
