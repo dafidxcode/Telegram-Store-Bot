@@ -326,6 +326,84 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         )
         return
 
+    # Handle admin text input for user search
+    if admin_state == "user_search":
+        message = update.message
+        if message is None or not message.text:
+            return
+        query_str = message.text.strip()
+        context.user_data.pop("admin_state", None)
+
+        users = db.search_users(query_str)
+        if not users:
+            await message.reply_text(
+                f"🔍 User tidak ditemukan untuk: *{escape_md(query_str)}*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=_admin_back_keyboard(lang),
+            )
+            return
+
+        lines = [f"🔍 Hasil Pencarian User ({len(users)} ditemukan):\n"]
+        buttons = []
+        for u in users[:10]:
+            name = f"@{u['username']}" if u.get("username") else u.get("first_name", str(u["user_id"]))
+            ban_icon = "🚫" if u.get("is_banned") else ""
+            lines.append(f"• {ban_icon} {name} | {u.get('total_orders', 0)} orders | Rp {format_rupiah(u.get('total_spent', 0))}")
+            buttons.append([InlineKeyboardButton(
+                f"👤 {name}",
+                callback_data=f"admin:userdetail:{u['user_id']}",
+            )])
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="admin:users")])
+        await message.reply_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+        return
+
+    # Commission settings
+    if admin_state == "setcommission":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            pct = int(message.text.strip())
+        except ValueError:
+            await message.reply_text("Harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            return
+        if pct < 1 or pct > 50:
+            await message.reply_text("Persentase harus antara 1-50. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            return
+        context.user_data.pop("admin_state", None)
+        db.set_setting("commission_percent", str(pct))
+        await message.reply_text(
+            t("admin_commission_updated", lang, percent=pct),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang, back_data="admin:commission"),
+        )
+        return
+
+    if admin_state == "setminwithdraw":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            amount = int(message.text.strip().replace(".", "").replace(",", ""))
+        except ValueError:
+            await message.reply_text("Harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            return
+        if amount < 10000:
+            await message.reply_text("Minimal Rp 10.000. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            return
+        context.user_data.pop("admin_state", None)
+        db.set_setting("min_withdrawal", str(amount))
+        await message.reply_text(
+            t("admin_min_withdraw_updated", lang, amount=format_rupiah(amount)),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang, back_data="admin:commission"),
+        )
+        return
+
     if admin_state == "editproduct_name":
         message = update.message
         if message is None or not message.text:
@@ -389,6 +467,142 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
                     [InlineKeyboardButton("✏️ Kembali ke Edit Produk", callback_data=f"admin:edetail:{pid}")],
                     [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
                 ]),
+            )
+        return
+
+    if admin_state == "feedback_reply":
+        message = update.message
+        if message is None or not message.text:
+            return
+        reply_text = message.text.strip()
+        feedback_id = context.user_data.pop("feedback_reply_id", None)
+        context.user_data.pop("admin_state", None)
+        if feedback_id:
+            fb = db.get_all_feedback()
+            fb_item = next((f for f in fb if f["id"] == feedback_id), None)
+            if fb_item:
+                db.reply_feedback(feedback_id, reply_text)
+                try:
+                    await context.bot.send_message(
+                        chat_id=fb_item["user_id"],
+                        text=t("feedback_reply_to_user", lang, reply=reply_text),
+                        parse_mode=ParseMode.MARKDOWN,
+                    )
+                except Exception:
+                    pass
+            await message.reply_text(
+                t("feedback_reply_sent", lang),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=_admin_back_keyboard(lang, back_data="admin:feedbacklist"),
+            )
+        return
+
+    if admin_state == "addvoucher":
+        message = update.message
+        if message is None or not message.text:
+            return
+        voucher_data = context.user_data.pop("addvoucher_data", {})
+        code = message.text.strip().upper()
+        if not code or len(code) < 3:
+            await message.reply_text("Kode voucher minimal 3 karakter. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            context.user_data["admin_state"] = "addvoucher"
+            return
+        existing = db.get_voucher(code)
+        if existing:
+            await message.reply_text(f"Kode voucher *{code}* sudah ada. Kirim kode lain:", parse_mode=ParseMode.MARKDOWN, reply_markup=_admin_back_keyboard(lang))
+            context.user_data["admin_state"] = "addvoucher"
+            return
+        voucher_data["code"] = code
+        context.user_data["admin_state"] = "addvoucher_value"
+        context.user_data["addvoucher_data"] = voucher_data
+        dtype = voucher_data.get("discount_type", "fixed")
+        dtype_label = "Nominal Tetap (Rp)" if dtype == "fixed" else "Persentase (%)"
+        await message.reply_text(
+            f"Kode: *{code}*\nTipe: *{dtype_label}*\n\nMasukkan nilai diskon:",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang),
+        )
+        return
+
+    if admin_state == "addvoucher_value":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            value = int(message.text.strip().replace(".", "").replace(",", ""))
+        except ValueError:
+            await message.reply_text("Nilai harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            return
+        voucher_data = context.user_data.pop("addvoucher_data", {})
+        voucher_data["discount_value"] = value
+        context.user_data["admin_state"] = "addvoucher_min"
+        context.user_data["addvoucher_data"] = voucher_data
+        await message.reply_text(
+            f"Nilai diskon: *{value}*{'%' if voucher_data.get('discount_type') == 'percent' else ''}\n\nMasukkan minimal pembelian (0 = tanpa minimal):",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang),
+        )
+        return
+
+    if admin_state == "addvoucher_min":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            min_purchase = int(message.text.strip().replace(".", "").replace(",", ""))
+        except ValueError:
+            await message.reply_text("Harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            return
+        voucher_data = context.user_data.pop("addvoucher_data", {})
+        voucher_data["min_purchase"] = min_purchase
+        context.user_data["admin_state"] = "addvoucher_max"
+        context.user_data["addvoucher_data"] = voucher_data
+        await message.reply_text(
+            "Masukkan maksimal penggunaan (0 = unlimited):",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang),
+        )
+        return
+
+    if admin_state == "addvoucher_max":
+        message = update.message
+        if message is None or not message.text:
+            return
+        try:
+            max_uses = int(message.text.strip())
+        except ValueError:
+            await message.reply_text("Harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
+            return
+        voucher_data = context.user_data.pop("addvoucher_data", {})
+        code = voucher_data["code"]
+        db.create_voucher(
+            code=code,
+            discount_type=voucher_data.get("discount_type", "fixed"),
+            discount_value=voucher_data["discount_value"],
+            min_purchase=voucher_data.get("min_purchase", 0),
+            max_uses=max_uses,
+        )
+        context.user_data.pop("admin_state", None)
+        await message.reply_text(
+            t("admin_voucher_added", lang, code=code),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang, back_data="admin:vouchers"),
+        )
+        return
+
+    if admin_state == "user_ban_reason":
+        message = update.message
+        if message is None or not message.text:
+            return
+        reason = message.text.strip()
+        ban_uid = context.user_data.pop("ban_user_id", None)
+        context.user_data.pop("admin_state", None)
+        if ban_uid:
+            db.ban_user(ban_uid, reason)
+            await message.reply_text(
+                t("user_banned_success", lang, id=ban_uid),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=_admin_back_keyboard(lang, back_data="admin:users"),
             )
         return
 

@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS orders (
   first_name TEXT,
   quantity INTEGER NOT NULL,
   total INTEGER NOT NULL,
+  original_total INTEGER DEFAULT 0,
+  voucher_code TEXT DEFAULT '',
   qris_nominal INTEGER DEFAULT 0,
   status TEXT DEFAULT 'pending',
   qris_ref TEXT,
@@ -60,10 +62,98 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT,
   first_name TEXT,
   lang TEXT DEFAULT 'en',
+  referral_code TEXT DEFAULT '',
+  referred_by INTEGER DEFAULT 0,
+  is_banned INTEGER DEFAULT 0,
+  ban_reason TEXT DEFAULT '',
   last_seen TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS referrals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  referrer_id INTEGER NOT NULL,
+  referred_id INTEGER NOT NULL,
+  reward_granted INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS vouchers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  discount_type TEXT DEFAULT 'fixed',
+  discount_value INTEGER NOT NULL DEFAULT 0,
+  min_purchase INTEGER DEFAULT 0,
+  max_uses INTEGER DEFAULT 0,
+  used_count INTEGER DEFAULT 0,
+  product_id INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,
+  expires_at TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS voucher_usages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  order_id TEXT DEFAULT '',
+  discount_amount INTEGER DEFAULT 0,
+  used_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  username TEXT DEFAULT '',
+  category TEXT DEFAULT 'saran',
+  message TEXT NOT NULL,
+  admin_reply TEXT DEFAULT '',
+  status TEXT DEFAULT 'open',
+  created_at TEXT DEFAULT (datetime('now')),
+  replied_at TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS purchase_details (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  product_name TEXT DEFAULT '',
+  accounts_delivered TEXT DEFAULT '',
+  delivered_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS bot_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS referral_commissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  referrer_id INTEGER NOT NULL,
+  referred_id INTEGER NOT NULL,
+  order_id TEXT NOT NULL,
+  order_amount INTEGER NOT NULL DEFAULT 0,
+  commission_percent INTEGER NOT NULL DEFAULT 10,
+  commission_amount INTEGER NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'earned',
+  created_at TEXT DEFAULT (datetime('now')),
+  paid_at TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS withdrawal_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  amount INTEGER NOT NULL DEFAULT 0,
+  bank_name TEXT DEFAULT '',
+  account_number TEXT DEFAULT '',
+  account_name TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  admin_note TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  processed_at TEXT DEFAULT ''
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_email_product ON stock(email, product_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
 """
 
 
@@ -128,6 +218,33 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {row["name"] for row in cursor.fetchall()}
     if "lang" not in cols:
         conn.execute("ALTER TABLE users ADD COLUMN lang TEXT DEFAULT 'en'")
+    if "referral_code" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''")
+    if "referred_by" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT 0")
+    if "is_banned" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+    if "ban_reason" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT ''")
+
+    cursor = conn.execute("PRAGMA table_info(orders)")
+    cols = {row["name"] for row in cursor.fetchall()}
+    if "original_total" not in cols:
+        conn.execute("ALTER TABLE orders ADD COLUMN original_total INTEGER DEFAULT 0")
+    if "voucher_code" not in cols:
+        conn.execute("ALTER TABLE orders ADD COLUMN voucher_code TEXT DEFAULT ''")
+
+    for tbl in ("referrals", "vouchers", "voucher_usages", "feedback", "purchase_details", "referral_commissions", "withdrawal_requests", "bot_settings"):
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS {tbl} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT
+            )
+        """)
+
+    try:
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code)")
+    except Exception:
+        pass
 
     conn.commit()
 
@@ -314,14 +431,24 @@ def create_order(
     product_id: int = 1,
     qris_nominal: int = 0,
     expires_at: str = "",
+    original_total: int = 0,
+    voucher_code: str = "",
 ) -> None:
     assert _conn is not None
     _conn.execute(
-        """INSERT INTO orders (id, product_id, user_id, username, first_name, quantity, total, qris_nominal, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (order_id, product_id, user_id, username, first_name, quantity, total, qris_nominal, expires_at),
+        """INSERT INTO orders (id, product_id, user_id, username, first_name, quantity, total, original_total, voucher_code, qris_nominal, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (order_id, product_id, user_id, username, first_name, quantity, total, original_total, voucher_code, qris_nominal, expires_at),
     )
     _conn.commit()
+
+
+def save_order_qris_message_id(order_id: str, message_id: int) -> None:
+    """Save the Telegram QRIS photo message_id for deleting upon successful payment."""
+    assert _conn is not None
+    _conn.execute("UPDATE orders SET qris_message_id = ? WHERE id = ?", (message_id, order_id))
+    _conn.commit()
+
 
 
 def get_order(order_id: str) -> dict | None:
@@ -532,4 +659,476 @@ def search_orders(query: str) -> list[dict]:
             (f"%{query}%", f"%{clean_q}%"),
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Referrals
+# ---------------------------------------------------------------------------
+
+def generate_referral_code(user_id: int) -> str:
+    """Generate and save a unique referral code for a user."""
+    assert _conn is not None
+    row = _conn.execute("SELECT referral_code FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    if row and row["referral_code"]:
+        return row["referral_code"]
+    import secrets
+    code = f"REF{user_id}{secrets.token_hex(3).upper()}"
+    _conn.execute("UPDATE users SET referral_code = ? WHERE user_id = ?", (code, user_id))
+    _conn.commit()
+    return code
+
+
+def get_user_by_referral_code(code: str) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute("SELECT * FROM users WHERE referral_code = ?", (code,)).fetchone()
+    return _row_to_dict(row)
+
+
+def set_referred_by(user_id: int, referrer_id: int) -> bool:
+    assert _conn is not None
+    existing = _conn.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    if existing and existing["referred_by"]:
+        return False
+    _conn.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (referrer_id, user_id))
+    _conn.execute(
+        "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
+        (referrer_id, user_id),
+    )
+    _conn.commit()
+    return True
+
+
+def get_referral_count(user_id: int) -> int:
+    assert _conn is not None
+    row = _conn.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = ?", (user_id,)).fetchone()
+    return row["cnt"] if row else 0
+
+
+def get_referral_list(user_id: int) -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        "SELECT r.*, u.username, u.first_name FROM referrals r LEFT JOIN users u ON r.referred_id = u.user_id WHERE r.referrer_id = ? ORDER BY r.created_at DESC",
+        (user_id,),
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Vouchers
+# ---------------------------------------------------------------------------
+
+def create_voucher(code: str, discount_type: str, discount_value: int,
+                   min_purchase: int = 0, max_uses: int = 0,
+                   product_id: int = 0, expires_at: str = "") -> int:
+    assert _conn is not None
+    cur = _conn.execute(
+        """INSERT INTO vouchers (code, discount_type, discount_value, min_purchase, max_uses, product_id, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (code.upper(), discount_type, discount_value, min_purchase, max_uses, product_id, expires_at),
+    )
+    _conn.commit()
+    return cur.lastrowid
+
+
+def get_voucher(code: str) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute("SELECT * FROM vouchers WHERE code = ?", (code.upper(),)).fetchone()
+    return _row_to_dict(row)
+
+
+def get_all_vouchers() -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute("SELECT * FROM vouchers ORDER BY id DESC").fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def validate_voucher(code: str, user_id: int, total: int, product_id: int = 0) -> tuple[bool, str, int]:
+    """Validate voucher and return (valid, message, discount_amount)."""
+    voucher = get_voucher(code)
+    if not voucher:
+        return False, "Voucher tidak ditemukan.", 0
+    if not voucher["is_active"]:
+        return False, "Voucher sudah tidak aktif.", 0
+    if voucher["expires_at"]:
+        from datetime import datetime
+        try:
+            exp = datetime.strptime(voucher["expires_at"], "%Y-%m-%d %H:%M:%S")
+            if datetime.now() > exp:
+                return False, "Voucher sudah kadaluarsa.", 0
+        except Exception:
+            pass
+    if voucher["max_uses"] > 0 and voucher["used_count"] >= voucher["max_uses"]:
+        return False, "Voucher sudah mencapai batas penggunaan.", 0
+    if voucher["min_purchase"] > 0 and total < voucher["min_purchase"]:
+        return False, f"Minimal pembelian Rp {voucher['min_purchase']:,}.", 0
+    if voucher["product_id"] > 0 and product_id != voucher["product_id"]:
+        return False, "Voucher tidak berlaku untuk produk ini.", 0
+
+    assert _conn is not None
+    row = _conn.execute(
+        "SELECT COUNT(*) as cnt FROM voucher_usages WHERE voucher_id = ? AND user_id = ?",
+        (voucher["id"], user_id),
+    ).fetchone()
+    if row and row["cnt"] > 0:
+        return False, "Anda sudah menggunakan voucher ini.", 0
+
+    if voucher["discount_type"] == "percent":
+        discount = int(total * voucher["discount_value"] / 100)
+    else:
+        discount = min(voucher["discount_value"], total)
+
+    return True, "Voucher valid.", discount
+
+
+def use_voucher(voucher_id: int, user_id: int, order_id: str, discount_amount: int) -> None:
+    assert _conn is not None
+    _conn.execute(
+        "INSERT INTO voucher_usages (voucher_id, user_id, order_id, discount_amount) VALUES (?, ?, ?, ?)",
+        (voucher_id, user_id, order_id, discount_amount),
+    )
+    _conn.execute(
+        "UPDATE vouchers SET used_count = used_count + 1 WHERE id = ?",
+        (voucher_id,),
+    )
+    _conn.commit()
+
+
+def delete_voucher(voucher_id: int) -> bool:
+    assert _conn is not None
+    cur = _conn.execute("DELETE FROM vouchers WHERE id = ?", (voucher_id,))
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def toggle_voucher(voucher_id: int) -> bool:
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE vouchers SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?",
+        (voucher_id,),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Feedback / Kritik Saran
+# ---------------------------------------------------------------------------
+
+def add_feedback(user_id: int, username: str, category: str, message: str) -> int:
+    assert _conn is not None
+    cur = _conn.execute(
+        "INSERT INTO feedback (user_id, username, category, message) VALUES (?, ?, ?, ?)",
+        (user_id, username, category, message),
+    )
+    _conn.commit()
+    return cur.lastrowid
+
+
+def get_all_feedback(status: str | None = None, limit: int = 50) -> list[dict]:
+    assert _conn is not None
+    if status:
+        rows = _conn.execute(
+            "SELECT * FROM feedback WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    else:
+        rows = _conn.execute(
+            "SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def reply_feedback(feedback_id: int, admin_reply: str) -> bool:
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE feedback SET admin_reply = ?, status = 'replied', replied_at = datetime('now') WHERE id = ?",
+        (admin_reply, feedback_id),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def close_feedback(feedback_id: int) -> bool:
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE feedback SET status = 'closed' WHERE id = ?",
+        (feedback_id,),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Purchase Details
+# ---------------------------------------------------------------------------
+
+def save_purchase_detail(order_id: str, user_id: int, product_name: str, accounts_delivered: str) -> None:
+    assert _conn is not None
+    _conn.execute(
+        "INSERT INTO purchase_details (order_id, user_id, product_name, accounts_delivered) VALUES (?, ?, ?, ?)",
+        (order_id, user_id, product_name, accounts_delivered),
+    )
+    _conn.commit()
+
+
+def get_purchase_detail(order_id: str) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute(
+        "SELECT * FROM purchase_details WHERE order_id = ?",
+        (order_id,),
+    ).fetchone()
+    return _row_to_dict(row)
+
+
+def get_user_purchase_details(user_id: int, limit: int = 20) -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        "SELECT * FROM purchase_details WHERE user_id = ? ORDER BY delivered_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# User Management (Admin)
+# ---------------------------------------------------------------------------
+
+def get_all_users_detail(limit: int = 100, offset: int = 0) -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        """SELECT u.*, 
+           (SELECT COUNT(*) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_orders,
+           (SELECT COALESCE(SUM(total), 0) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_spent
+           FROM users u ORDER BY u.last_seen DESC LIMIT ? OFFSET ?""",
+        (limit, offset),
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_user_detail(user_id: int) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute(
+        """SELECT u.*,
+           (SELECT COUNT(*) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_orders,
+           (SELECT COALESCE(SUM(total), 0) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_spent
+           FROM users u WHERE u.user_id = ?""",
+        (user_id,),
+    ).fetchone()
+    return _row_to_dict(row)
+
+
+def ban_user(user_id: int, reason: str = "") -> bool:
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE users SET is_banned = 1, ban_reason = ? WHERE user_id = ?",
+        (reason, user_id),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def unban_user(user_id: int) -> bool:
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE users SET is_banned = 0, ban_reason = '' WHERE user_id = ?",
+        (user_id,),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def is_user_banned(user_id: int) -> bool:
+    assert _conn is not None
+    row = _conn.execute("SELECT is_banned FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    return bool(row and row["is_banned"])
+
+
+def search_users(query: str) -> list[dict]:
+    assert _conn is not None
+    q = query.strip()
+    if q.isdigit():
+        rows = _conn.execute(
+            """SELECT u.*,
+               (SELECT COUNT(*) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_orders,
+               (SELECT COALESCE(SUM(total), 0) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_spent
+               FROM users u WHERE u.user_id = ? LIMIT 20""",
+            (int(q),),
+        ).fetchall()
+    else:
+        clean = q.lstrip("@")
+        rows = _conn.execute(
+            """SELECT u.*,
+               (SELECT COUNT(*) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_orders,
+               (SELECT COALESCE(SUM(total), 0) FROM orders WHERE user_id = u.user_id AND status = 'paid') as total_spent
+               FROM users u WHERE u.username LIKE ? OR u.first_name LIKE ? LIMIT 20""",
+            (f"%{clean}%", f"%{clean}%"),
+        ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Bot Settings (key-value store)
+# ---------------------------------------------------------------------------
+
+def get_setting(key: str, default: str = "") -> str:
+    assert _conn is not None
+    row = _conn.execute("SELECT value FROM bot_settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(key: str, value: str) -> None:
+    assert _conn is not None
+    _conn.execute(
+        "INSERT INTO bot_settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    _conn.commit()
+
+
+def get_commission_percent() -> int:
+    val = get_setting("commission_percent", "10")
+    try:
+        p = int(val)
+        return max(1, min(50, p))
+    except ValueError:
+        return 10
+
+
+def get_min_withdrawal() -> int:
+    val = get_setting("min_withdrawal", "50000")
+    try:
+        return max(10000, int(val))
+    except ValueError:
+        return 50000
+
+
+# ---------------------------------------------------------------------------
+# Referral Commissions
+# ---------------------------------------------------------------------------
+
+def add_commission(referrer_id: int, referred_id: int, order_id: str,
+                   order_amount: int, commission_percent: int, commission_amount: int) -> int:
+    assert _conn is not None
+    cur = _conn.execute(
+        """INSERT INTO referral_commissions (referrer_id, referred_id, order_id, order_amount, commission_percent, commission_amount)
+        VALUES (?, ?, ?, ?, ?, ?)""",
+        (referrer_id, referred_id, order_id, order_amount, commission_percent, commission_amount),
+    )
+    _conn.commit()
+    return cur.lastrowid
+
+
+def has_commission_for_order(order_id: str) -> bool:
+    assert _conn is not None
+    row = _conn.execute("SELECT 1 FROM referral_commissions WHERE order_id = ? LIMIT 1", (order_id,)).fetchone()
+    return row is not None
+
+
+def get_user_commission_balance(user_id: int) -> int:
+    assert _conn is not None
+    row = _conn.execute(
+        "SELECT COALESCE(SUM(commission_amount), 0) as total FROM referral_commissions WHERE referrer_id = ? AND status = 'earned'",
+        (user_id,),
+    ).fetchone()
+    total_earned = row["total"] if row else 0
+
+    row2 = _conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM withdrawal_requests WHERE user_id = ? AND status IN ('pending', 'approved')",
+        (user_id,),
+    ).fetchone()
+    withdrawn = row2["total"] if row2 else 0
+    return max(0, total_earned - withdrawn)
+
+
+def get_user_total_commission(user_id: int) -> int:
+    assert _conn is not None
+    row = _conn.execute(
+        "SELECT COALESCE(SUM(commission_amount), 0) as total FROM referral_commissions WHERE referrer_id = ?",
+        (user_id,),
+    ).fetchone()
+    return row["total"] if row else 0
+
+
+def get_user_commissions(user_id: int, limit: int = 20) -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        """SELECT rc.*, u.username as referred_username, u.first_name as referred_name
+           FROM referral_commissions rc
+           LEFT JOIN users u ON rc.referred_id = u.user_id
+           WHERE rc.referrer_id = ? ORDER BY rc.created_at DESC LIMIT ?""",
+        (user_id, limit),
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Withdrawal Requests
+# ---------------------------------------------------------------------------
+
+def create_withdrawal_request(user_id: int, amount: int, bank_name: str,
+                               account_number: str, account_name: str) -> int:
+    assert _conn is not None
+    cur = _conn.execute(
+        """INSERT INTO withdrawal_requests (user_id, amount, bank_name, account_number, account_name)
+        VALUES (?, ?, ?, ?, ?)""",
+        (user_id, amount, bank_name, account_number, account_name),
+    )
+    _conn.commit()
+    return cur.lastrowid
+
+
+def get_pending_withdrawals() -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        """SELECT wr.*, u.username, u.first_name
+           FROM withdrawal_requests wr
+           LEFT JOIN users u ON wr.user_id = u.user_id
+           WHERE wr.status = 'pending' ORDER BY wr.created_at DESC""",
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_all_withdrawals(limit: int = 50) -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        """SELECT wr.*, u.username, u.first_name
+           FROM withdrawal_requests wr
+           LEFT JOIN users u ON wr.user_id = u.user_id
+           ORDER BY wr.created_at DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_user_withdrawals(user_id: int, limit: int = 20) -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        "SELECT * FROM withdrawal_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def process_withdrawal(request_id: int, status: str, admin_note: str = "") -> bool:
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE withdrawal_requests SET status = ?, admin_note = ?, processed_at = datetime('now') WHERE id = ?",
+        (status, admin_note, request_id),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def get_withdrawal_request(request_id: int) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute(
+        """SELECT wr.*, u.username, u.first_name
+           FROM withdrawal_requests wr
+           LEFT JOIN users u ON wr.user_id = u.user_id
+           WHERE wr.id = ?""",
+        (request_id,),
+    ).fetchone()
+    return _row_to_dict(row)
 

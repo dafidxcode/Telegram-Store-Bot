@@ -29,7 +29,7 @@ from telegram.ext import ContextTypes
 import config
 import db
 from payments import klikqris
-from handlers.start import build_home_text, get_main_menu_keyboard, t, format_rupiah, escape_md
+from handlers.start import build_home_text, get_main_menu_keyboard, t, format_rupiah, escape_md, _safe_edit_or_send
 
 logger = logging.getLogger(__name__)
 
@@ -136,16 +136,27 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                     txt_content += f"{product_desc}\n"
                     txt_content += f"==================================================\n\n"
 
+                account_lines = []
                 for item in stock_items:
                     em = item.get("email", "")
                     pw = item.get("password", "")
                     bal = item.get("balance", "")
                     if pw and bal:
                         txt_content += f"{em}:{pw}:{bal}\n"
+                        account_lines.append(f"{em}:{pw}:{bal}")
                     elif pw:
                         txt_content += f"{em}:{pw}\n"
+                        account_lines.append(f"{em}:{pw}")
                     else:
                         txt_content += f"{em}\n"
+                        account_lines.append(em)
+
+                db.save_purchase_detail(
+                    order_id=order_id,
+                    user_id=user_id,
+                    product_name=product_name,
+                    accounts_delivered="\n".join(account_lines),
+                )
 
                 txt_bytes = txt_content.encode("utf-8")
                 txt_file = io.BytesIO(txt_bytes)
@@ -167,12 +178,27 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                         chat_id=user_id,
                         document=txt_file,
                         caption=caption,
+                        reply_markup=get_main_menu_keyboard(user_id, user_lang),
                     )
                 except Exception as e:
                     logger.warning("Failed to send file to user %s: %s", user_id, e)
 
+                qris_msg_id = order.get("qris_message_id")
+                if qris_msg_id:
+                    try:
+                        await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+                    except Exception:
+                        pass
+
+                try:
+                    from notifier import send_channel_purchase_notif
+                    await send_channel_purchase_notif(bot, order, product_name)
+                except Exception as e:
+                    logger.warning("Failed to send channel purchase notif: %s", e)
+
                 try:
                     for admin_id in config.ADMIN_IDS:
+
                         admin_lang = db.get_user_lang(admin_id)
                         await bot.send_message(
                             chat_id=admin_id,
@@ -185,6 +211,33 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
                         )
                 except Exception as e:
                     logger.warning("Failed to notify admin: %s", e)
+                # --- Apply referral commission ---
+                try:
+                    buyer_user = db._conn.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,)).fetchone()
+                    if buyer_user and buyer_user["referred_by"]:
+                        referrer_id = buyer_user["referred_by"]
+                        if not db.has_commission_for_order(order_id):
+                            commission_pct = db.get_commission_percent()
+                            order_amount = order.get("total", 0)
+                            commission_amount = int(order_amount * commission_pct / 100)
+                            if commission_amount > 0:
+                                db.add_commission(referrer_id, user_id, order_id, order_amount, commission_pct, commission_amount)
+                                try:
+                                    referrer_lang = db.get_user_lang(referrer_id)
+                                    await bot.send_message(
+                                        chat_id=referrer_id,
+                                        text=t("commission_notif", referrer_lang,
+                                            amount=format_rupiah(commission_amount),
+                                            name=order.get("first_name") or order.get("username") or str(user_id),
+                                            order_id=order_id),
+                                        parse_mode="Markdown",
+                                    )
+                                except Exception:
+                                    pass
+                                logger.info("Commission Rp %d applied for referrer %s from order %s", commission_amount, referrer_id, order_id)
+                except Exception as exc:
+                    logger.exception("Failed to apply commission for order %s: %s", order_id, exc)
+
             else:
                 logger.warning("Order %s paid but stock insufficient for product %s!", order_id, product_id)
                 try:

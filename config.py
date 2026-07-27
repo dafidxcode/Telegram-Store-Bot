@@ -62,3 +62,17 @@ if _extra_admins:
 # Maintenance mode state
 MAINTENANCE_MODE: bool = False
 
+# Channel configuration for notification & mandatory force join
+CHANNEL_ID: str = os.getenv("CHANNEL_ID", "-1004427476664").strip()
+CHANNEL_LINK: str = os.getenv("CHANNEL_LINK", "https://t.me/viintoolsstore").strip()
+
+
+def get_channel_id() -> str:
+    from db import get_setting
+    return get_setting("channel_id", CHANNEL_ID)
+
+
+def get_channel_link() -> str:
+    from db import get_setting
+    return get_setting("channel_link", CHANNEL_LINK)
+

@@ -400,6 +400,26 @@
             font-size: 20px;
         }
 
+        .stat-icon.green {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .stat-icon.amber {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .stat-icon.purple {
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+        }
+
+        .stat-icon.red {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
         .stat-value {
             font-size: 26px;
             font-weight: 700;
@@ -574,7 +594,7 @@
 <body>
 
     <!-- Toast Notifications Container -->
-    <div id-="toast-container" id="toast-container"></div>
+    <div id="toast-container"></div>
 
     <!-- LOGIN SCREEN -->
     <div id="login-screen">
@@ -631,9 +651,14 @@
             <button class="tab-btn active" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i> Dashboard</button>
             <button class="tab-btn" onclick="switchTab('products')"><i class="fa-solid fa-box"></i> Produk</button>
             <button class="tab-btn" onclick="switchTab('stock')"><i class="fa-solid fa-file-arrow-up"></i> Stok Akun</button>
-            <button class="tab-btn" onclick="switchTab('orders')"><i class="fa-solid fa-receipt"></i> Transaksi & Pesanan</button>
+            <button class="tab-btn" onclick="switchTab('orders')"><i class="fa-solid fa-receipt"></i> Transaksi</button>
+            <button class="tab-btn" onclick="switchTab('users')"><i class="fa-solid fa-users"></i> Users</button>
+            <button class="tab-btn" onclick="switchTab('vouchers')"><i class="fa-solid fa-ticket"></i> Voucher</button>
+            <button class="tab-btn" onclick="switchTab('feedback')"><i class="fa-solid fa-comment-dots"></i> Feedback</button>
+            <button class="tab-btn" onclick="switchTab('commission')"><i class="fa-solid fa-coins"></i> Komisi</button>
+            <button class="tab-btn" onclick="switchTab('withdrawals')"><i class="fa-solid fa-money-bill-wave"></i> Penarikan</button>
             <button class="tab-btn" onclick="switchTab('broadcast')"><i class="fa-solid fa-bullhorn"></i> Broadcast</button>
-            <button class="tab-btn" onclick="switchTab('admins')"><i class="fa-solid fa-sliders"></i> Pengaturan Admin</button>
+            <button class="tab-btn" onclick="switchTab('admins')"><i class="fa-solid fa-sliders"></i> Settings</button>
         </div>
 
         <!-- MAIN CONTAINER -->
@@ -661,6 +686,15 @@
 
                     <div class="stat-card">
                         <div class="stat-header">
+                            <span>TERJUAL</span>
+                            <div class="stat-icon purple"><i class="fa-solid fa-check-double"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-sold">0</div>
+                        <div class="stat-sub">Akun terjual</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
                             <span>PESANAN PENDING</span>
                             <div class="stat-icon amber"><i class="fa-solid fa-hourglass-half"></i></div>
                         </div>
@@ -671,10 +705,19 @@
                     <div class="stat-card">
                         <div class="stat-header">
                             <span>TOTAL USER BOT</span>
-                            <div class="stat-icon purple"><i class="fa-solid fa-users"></i></div>
+                            <div class="stat-icon red"><i class="fa-solid fa-users"></i></div>
                         </div>
                         <div class="stat-value" id="stat-total-users">0</div>
                         <div class="stat-sub">Pengguna terdaftar</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span>PRODUK AKTIF</span>
+                            <div class="stat-icon green"><i class="fa-solid fa-box-open"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-active-products">0</div>
+                        <div class="stat-sub">Produk dijual</div>
                     </div>
                 </div>
 
@@ -865,7 +908,212 @@
                 </div>
             </div>
 
-            <!-- TAB 6: ADMINS & SETTINGS -->
+            <!-- TAB 6: USER MANAGEMENT -->
+            <div id="tab-users" class="tab-content">
+                <div class="section-card">
+                    <div class="section-header">
+                        <span class="section-title"><i class="fa-solid fa-users"></i> Manajemen Pengguna</span>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="user-search-input" class="form-control" style="width: 250px;"
+                                placeholder="Cari User ID / Username..."
+                                onkeyup="if(event.key==='Enter') searchUsers()">
+                            <button class="btn btn-sm" onclick="searchUsers()"><i class="fa-solid fa-magnifying-glass"></i> Cari</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>USER ID</th>
+                                    <th>USERNAME</th>
+                                    <th>NAMA</th>
+                                    <th>PESANAN</th>
+                                    <th>TOTAL BELANJA</th>
+                                    <th>STATUS</th>
+                                    <th>LAST SEEN</th>
+                                    <th>AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <tr><td colspan="8" style="text-align:center;">Memuat data...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 7: VOUCHER MANAGEMENT -->
+            <div id="tab-vouchers" class="tab-content">
+                <div class="grid-2">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-title"><i class="fa-solid fa-ticket"></i> Daftar Voucher</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>KODE</th>
+                                        <th>TIPE</th>
+                                        <th>NILAI</th>
+                                        <th>MIN. BELI</th>
+                                        <th>TERPAKAI</th>
+                                        <th>STATUS</th>
+                                        <th>AKSI</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vouchers-table-body">
+                                    <tr><td colspan="7" style="text-align:center;">Memuat voucher...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-title"><i class="fa-solid fa-square-plus"></i> Tambah Voucher</span>
+                        </div>
+                        <form id="form-add-voucher">
+                            <div class="form-group">
+                                <label>Kode Voucher</label>
+                                <input type="text" id="v-code" class="form-control" placeholder="Contoh: PROMO20" required style="text-transform: uppercase;">
+                            </div>
+                            <div class="form-group">
+                                <label>Tipe Diskon</label>
+                                <select id="v-type" class="form-control">
+                                    <option value="fixed">Nominal Tetap (Rp)</option>
+                                    <option value="percent">Persentase (%)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Nilai Diskon</label>
+                                <input type="number" id="v-value" class="form-control" placeholder="10000 atau 20" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Minimal Pembelian (0 = tanpa minimal)</label>
+                                <input type="number" id="v-min" class="form-control" placeholder="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Maks. Penggunaan (0 = unlimited)</label>
+                                <input type="number" id="v-max" class="form-control" placeholder="0" value="0">
+                            </div>
+                            <button type="submit" class="btn btn-success"><i class="fa-solid fa-plus"></i> Buat Voucher</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 8: FEEDBACK MANAGEMENT -->
+            <div id="tab-feedback" class="tab-content">
+                <div class="section-card">
+                    <div class="section-header">
+                        <span class="section-title"><i class="fa-solid fa-comment-dots"></i> Kritik & Saran</span>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="fb-filter" class="form-control" style="width: 150px;" onchange="loadFeedback()">
+                                <option value="">Semua</option>
+                                <option value="open">Open</option>
+                                <option value="replied">Replied</option>
+                                <option value="closed">Closed</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline" onclick="loadFeedback()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>USER</th>
+                                    <th>KATEGORI</th>
+                                    <th>PESAN</th>
+                                    <th>STATUS</th>
+                                    <th>TANGGAL</th>
+                                    <th>AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="feedback-table-body">
+                                <tr><td colspan="7" style="text-align:center;">Memuat feedback...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 6: COMMISSION SETTINGS -->
+            <div id="tab-commission" class="tab-content">
+                <div class="grid-2">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-title"><i class="fa-solid fa-coins"></i> Pengaturan Komisi Referral</span>
+                        </div>
+                        <form id="commission-form" style="display: flex; flex-direction: column; gap: 16px;">
+                            <div class="form-group">
+                                <label>Persentase Komisi (%)</label>
+                                <input type="number" id="comm-pct" class="form-control" min="1" max="50" placeholder="10">
+                                <small style="color: var(--text-muted);">Persentase dari total transaksi yang diterima pengundang (1-50%)</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Minimal Pencairan (Rp)</label>
+                                <input type="number" id="comm-min-wd" class="form-control" min="10000" step="1000" placeholder="50000">
+                                <small style="color: var(--text-muted);">Jumlah minimum yang bisa dicairkan (minimal Rp 10.000)</small>
+                            </div>
+                            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan Pengaturan</button>
+                        </form>
+                    </div>
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-title"><i class="fa-solid fa-circle-info"></i> Cara Kerja Komisi</span>
+                        </div>
+                        <div style="font-size: 14px; color: var(--text-muted); line-height: 1.8;">
+                            <p>1. User mengundang teman menggunakan <b>kode referral</b></p>
+                            <p>2. Ketika teman yang diundang <b>berhasil melakukan pembelian</b>, pengundang mendapat komisi</p>
+                            <p>3. Komisi = <b>Total Transaksi x Persentase Komisi</b></p>
+                            <p>4. Misalnya: Transaksi Rp 50.000 x 10% = <b>Rp 5.000 komisi</b></p>
+                            <p>5. Pengundang bisa mencairkan dana komisi dengan minimal Rp 50.000</p>
+                            <p>6. Admin memproses pencairan secara manual (transfer bank)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 7: WITHDRAWAL REQUESTS -->
+            <div id="tab-withdrawals" class="tab-content">
+                <div class="section-card">
+                    <div class="section-header">
+                        <span class="section-title"><i class="fa-solid fa-money-bill-wave"></i> Permintaan Pencairan Dana</span>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="wd-filter" class="form-control" style="width: 150px;" onchange="loadWithdrawals()">
+                                <option value="">Semua</option>
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>USER</th>
+                                    <th>BANK</th>
+                                    <th>REKENING</th>
+                                    <th>NAMA</th>
+                                    <th>JUMLAH</th>
+                                    <th>STATUS</th>
+                                    <th>TANGGAL</th>
+                                    <th>AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="withdrawals-table-body">
+                                <tr><td colspan="9" style="text-align:center;">Memuat data...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 8: ADMINS & SETTINGS -->
             <div id="tab-admins" class="tab-content">
                 <div class="grid-2">
                     <div class="section-card">
@@ -1030,6 +1278,11 @@
             if (tabId === 'products') loadProducts();
             if (tabId === 'stock') loadStockTab();
             if (tabId === 'orders') searchOrders();
+            if (tabId === 'users') loadUsers();
+            if (tabId === 'vouchers') loadVouchers();
+            if (tabId === 'feedback') loadFeedback();
+            if (tabId === 'commission') loadCommissionSettings();
+            if (tabId === 'withdrawals') loadWithdrawals();
             if (tabId === 'admins') loadAdmins();
         }
 
@@ -1053,8 +1306,10 @@
             document.getElementById('stat-total-rev').innerText = formatRupiah(data.revenue.total_revenue);
             document.getElementById('stat-today-rev').innerText = 'Hari ini: ' + formatRupiah(data.revenue.today_revenue);
             document.getElementById('stat-ready-stock').innerText = data.stock;
+            document.getElementById('stat-sold').innerText = data.total_sold || 0;
             document.getElementById('stat-pending-orders').innerText = data.pending;
             document.getElementById('stat-total-users').innerText = data.total_users;
+            document.getElementById('stat-active-products').innerText = data.active_product_count || 0;
 
             document.getElementById('fin-today').innerText = formatRupiah(data.revenue.today_revenue) + ` (${data.revenue.today_orders} tx)`;
             document.getElementById('fin-week').innerText = formatRupiah(data.revenue.week_revenue) + ` (${data.revenue.week_orders} tx)`;
@@ -1322,6 +1577,350 @@
             if (res.ok) {
                 showToast('Admin dihapus!', 'warning');
                 loadAdmins();
+            }
+        }
+
+        // =========================================================================
+        // USER MANAGEMENT
+        // =========================================================================
+
+        async function loadUsers() {
+            const res = await fetch('/api/users?limit=50');
+            const data = await res.json();
+            renderUsers(data.users || []);
+        }
+
+        async function searchUsers() {
+            const query = document.getElementById('user-search-input').value.trim();
+            const url = query ? `/api/users?query=${encodeURIComponent(query)}` : '/api/users?limit=50';
+            const res = await fetch(url);
+            const data = await res.json();
+            renderUsers(data.users || []);
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('users-table-body');
+            tbody.innerHTML = '';
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                const name = u.username ? `@${u.username}` : (u.first_name || 'N/A');
+                const banBadge = u.is_banned ? '<span class="badge badge-danger">BANNED</span>' : '<span class="badge badge-success">Aktif</span>';
+                const lastSeen = u.last_seen || '-';
+                tr.innerHTML = `
+                    <td><code>${u.user_id}</code></td>
+                    <td>${u.username ? '@' + u.username : '-'}</td>
+                    <td>${u.first_name || '-'}</td>
+                    <td><b>${u.total_orders || 0}</b></td>
+                    <td><b>${formatRupiah(u.total_spent || 0)}</b></td>
+                    <td>${banBadge}</td>
+                    <td style="font-size:12px;">${lastSeen}</td>
+                    <td>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn btn-sm btn-outline" onclick="viewUserDetail(${u.user_id})"><i class="fa-solid fa-eye"></i></button>
+                            ${u.is_banned
+                                ? `<button class="btn btn-sm btn-success" onclick="unbanUser(${u.user_id})"><i class="fa-solid fa-check"></i></button>`
+                                : `<button class="btn btn-sm btn-danger" onclick="banUser(${u.user_id})"><i class="fa-solid fa-ban"></i></button>`
+                            }
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function viewUserDetail(uid) {
+            const res = await fetch(`/api/users/${uid}`);
+            const data = await res.json();
+            const u = data.user;
+            if (!u) { showToast('User tidak ditemukan', 'error'); return; }
+
+            const name = u.username ? `@${u.username}` : (u.first_name || 'N/A');
+            const banStatus = u.is_banned ? `🚫 DIBLOKIR - ${u.ban_reason || ''}` : '✅ Aktif';
+            const orders = data.orders || [];
+
+            let ordersHtml = orders.slice(0, 5).map(o => {
+                const badge = o.status === 'paid' ? 'badge-success' : o.status === 'pending' ? 'badge-warning' : 'badge-danger';
+                return `<tr>
+                    <td><code>#${o.id}</code></td>
+                    <td>${o.product_id || 1}</td>
+                    <td>${o.quantity}</td>
+                    <td>${formatRupiah(o.total)}</td>
+                    <td><span class="badge ${badge}">${o.status}</span></td>
+                    <td style="font-size:12px;">${o.created_at || '-'}</td>
+                </tr>`;
+            }).join('');
+
+            showToast(`User: ${name} | Orders: ${u.total_orders || 0} | Total: ${formatRupiah(u.total_spent || 0)}`, 'info');
+        }
+
+        async function banUser(uid) {
+            const reason = prompt('Alasan pemblokiran (opsional):') || '';
+            const res = await fetch(`/api/users/${uid}/ban`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) {
+                showToast(`User ${uid} diblokir!`, 'warning');
+                loadUsers();
+            }
+        }
+
+        async function unbanUser(uid) {
+            const res = await fetch(`/api/users/${uid}/unban`, { method: 'POST' });
+            if (res.ok) {
+                showToast(`User ${uid} dibuka blokirnya!`, 'success');
+                loadUsers();
+            }
+        }
+
+        // =========================================================================
+        // VOUCHER MANAGEMENT
+        // =========================================================================
+
+        async function loadVouchers() {
+            const res = await fetch('/api/vouchers');
+            const data = await res.json();
+            const tbody = document.getElementById('vouchers-table-body');
+            tbody.innerHTML = '';
+
+            (data.vouchers || []).forEach(v => {
+                const tr = document.createElement('tr');
+                const dtype = v.discount_type === 'percent' ? '%' : 'Rp';
+                const statusBadge = v.is_active ? '<span class="badge badge-success">Aktif</span>' : '<span class="badge badge-danger">Nonaktif</span>';
+                tr.innerHTML = `
+                    <td><code>${v.code}</code></td>
+                    <td>${v.discount_type === 'percent' ? 'Persentase' : 'Nominal'}</td>
+                    <td><b>${dtype} ${Number(v.discount_value).toLocaleString()}</b></td>
+                    <td>${v.min_purchase > 0 ? formatRupiah(v.min_purchase) : '-'}</td>
+                    <td>${v.used_count}/${v.max_uses || '∞'}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn btn-sm btn-outline" onclick="toggleVoucher(${v.id})">🔄</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteVoucher(${v.id})"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('form-add-voucher').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const code = document.getElementById('v-code').value.trim().toUpperCase();
+            const discount_type = document.getElementById('v-type').value;
+            const discount_value = parseInt(document.getElementById('v-value').value);
+            const min_purchase = parseInt(document.getElementById('v-min').value) || 0;
+            const max_uses = parseInt(document.getElementById('v-max').value) || 0;
+
+            const res = await fetch('/api/vouchers/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, discount_type, discount_value, min_purchase, max_uses })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`Voucher ${code} berhasil dibuat!`, 'success');
+                document.getElementById('form-add-voucher').reset();
+                loadVouchers();
+            } else {
+                showToast(data.error || 'Gagal membuat voucher', 'error');
+            }
+        });
+
+        async function toggleVoucher(vid) {
+            const res = await fetch(`/api/vouchers/${vid}/toggle`, { method: 'POST' });
+            if (res.ok) {
+                showToast('Status voucher diubah!', 'success');
+                loadVouchers();
+            }
+        }
+
+        async function deleteVoucher(vid) {
+            if (!confirm('Hapus voucher ini?')) return;
+            const res = await fetch(`/api/vouchers/${vid}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast('Voucher dihapus!', 'warning');
+                loadVouchers();
+            }
+        }
+
+        // =========================================================================
+        // FEEDBACK MANAGEMENT
+        // =========================================================================
+
+        async function loadFeedback() {
+            const filter = document.getElementById('fb-filter').value;
+            const url = filter ? `/api/feedback?status=${filter}` : '/api/feedback';
+            const res = await fetch(url);
+            const data = await res.json();
+            const tbody = document.getElementById('feedback-table-body');
+            tbody.innerHTML = '';
+
+            (data.feedback || []).forEach(fb => {
+                const tr = document.createElement('tr');
+                const statusBadge = fb.status === 'replied' ? '<span class="badge badge-success">Replied</span>'
+                    : fb.status === 'closed' ? '<span class="badge badge-info">Closed</span>'
+                    : '<span class="badge badge-warning">Open</span>';
+                const msg = fb.message.length > 50 ? fb.message.substring(0, 50) + '...' : fb.message;
+                tr.innerHTML = `
+                    <td>#${fb.id}</td>
+                    <td>@${fb.username || '?'}<br><small style="color:var(--text-muted);">${fb.user_id}</small></td>
+                    <td><span class="badge badge-info">${fb.category}</span></td>
+                    <td style="max-width:250px; font-size:13px;">${msg}</td>
+                    <td>${statusBadge}</td>
+                    <td style="font-size:12px;">${fb.created_at || '-'}</td>
+                    <td>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn btn-sm btn-outline" onclick="viewFeedback(${fb.id})"><i class="fa-solid fa-eye"></i></button>
+                            ${fb.status === 'open' ? `<button class="btn btn-sm btn-success" onclick="replyFeedback(${fb.id})"><i class="fa-solid fa-reply"></i></button>` : ''}
+                            ${fb.status !== 'closed' ? `<button class="btn btn-sm btn-danger" onclick="closeFeedback(${fb.id})"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function viewFeedback(fid) {
+            fetch('/api/feedback').then(r => r.json()).then(data => {
+                const fb = (data.feedback || []).find(f => f.id === fid);
+                if (!fb) return;
+                const replySection = fb.admin_reply ? `<br><br><b>Balasan Admin:</b><br>${fb.admin_reply}` : '';
+                showToast(`#${fb.id} | @${fb.username || '?'} | ${fb.category}: ${fb.message}${replySection}`, 'info');
+            });
+        }
+
+        async function replyFeedback(fid) {
+            const reply = prompt('Masukkan balasan untuk feedback ini:');
+            if (!reply || !reply.trim()) return;
+            const res = await fetch(`/api/feedback/${fid}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reply: reply.trim() })
+            });
+            if (res.ok) {
+                showToast('Balasan terkirim ke pengguna!', 'success');
+                loadFeedback();
+            }
+        }
+
+        async function closeFeedback(fid) {
+            const res = await fetch(`/api/feedback/${fid}/close`, { method: 'POST' });
+            if (res.ok) {
+                showToast('Feedback ditutup!', 'warning');
+                loadFeedback();
+            }
+        }
+
+        // =========================================================================
+        // COMMISSION SETTINGS
+        // =========================================================================
+
+        async function loadCommissionSettings() {
+            const res = await fetch('/api/settings/commission');
+            const data = await res.json();
+            document.getElementById('comm-pct').value = data.commission_percent || 10;
+            document.getElementById('comm-min-wd').value = data.min_withdrawal || 50000;
+        }
+
+        document.getElementById('commission-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pct = parseInt(document.getElementById('comm-pct').value);
+            const minWd = parseInt(document.getElementById('comm-min-wd').value);
+
+            if (pct < 1 || pct > 50) {
+                showToast('Persentase komisi harus antara 1-50%', 'error');
+                return;
+            }
+            if (minWd < 10000) {
+                showToast('Minimal pencairan harus >= Rp 10.000', 'error');
+                return;
+            }
+
+            const res = await fetch('/api/settings/commission', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commission_percent: pct, min_withdrawal: minWd })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`Pengaturan komisi disimpan! Komisi: ${data.commission_percent}%, Min. Tarik: Rp ${formatRupiah(data.min_withdrawal)}`, 'success');
+            } else {
+                showToast(data.error || 'Gagal menyimpan', 'error');
+            }
+        });
+
+        // =========================================================================
+        // WITHDRAWAL MANAGEMENT
+        // =========================================================================
+
+        async function loadWithdrawals() {
+            const filter = document.getElementById('wd-filter').value;
+            const url = filter ? `/api/withdrawals?status=${filter}` : '/api/withdrawals';
+            const res = await fetch(url);
+            const data = await res.json();
+            const tbody = document.getElementById('withdrawals-table-body');
+            tbody.innerHTML = '';
+
+            if (!data.withdrawals || data.withdrawals.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Tidak ada data pencairan</td></tr>';
+                return;
+            }
+
+            data.withdrawals.forEach(w => {
+                const tr = document.createElement('tr');
+                const statusBadge = w.status === 'approved' ? '<span class="badge badge-success">Approved</span>'
+                    : w.status === 'rejected' ? '<span class="badge badge-danger">Rejected</span>'
+                    : '<span class="badge badge-warning">Pending</span>';
+                tr.innerHTML = `
+                    <td>#${w.id}</td>
+                    <td>@${w.username || w.first_name || '?'}<br><small style="color:var(--text-muted);">${w.user_id}</small></td>
+                    <td>${w.bank_name || '-'}</td>
+                    <td><code>${w.account_number || '-'}</code></td>
+                    <td>${w.account_name || '-'}</td>
+                    <td><b>Rp ${formatRupiah(w.amount)}</b></td>
+                    <td>${statusBadge}</td>
+                    <td style="font-size:12px;">${w.created_at || '-'}</td>
+                    <td>
+                        ${w.status === 'pending' ? `
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-success" onclick="approveWithdrawal(${w.id})"><i class="fa-solid fa-check"></i></button>
+                                <button class="btn btn-sm btn-danger" onclick="rejectWithdrawal(${w.id})"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        ` : (w.admin_note || '-')}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function approveWithdrawal(wdId) {
+            if (!confirm('Setujui pencairan ini?')) return;
+            const res = await fetch(`/api/withdrawals/${wdId}/approve`, { method: 'POST' });
+            if (res.ok) {
+                showToast('Pencairan disetujui!', 'success');
+                loadWithdrawals();
+            } else {
+                const data = await res.json();
+                showToast(data.error || 'Gagal', 'error');
+            }
+        }
+
+        async function rejectWithdrawal(wdId) {
+            const reason = prompt('Alasan penolakan (opsional):') || 'Ditolak oleh admin';
+            const res = await fetch(`/api/withdrawals/${wdId}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) {
+                showToast('Pencairan ditolak!', 'warning');
+                loadWithdrawals();
+            } else {
+                const data = await res.json();
+                showToast(data.error || 'Gagal', 'error');
             }
         }
 

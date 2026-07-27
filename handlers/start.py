@@ -1,16 +1,19 @@
 """Start, help, and menu command handlers with inline keyboard buttons."""
 
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 import config
 import db
 import lang as L
+from channel_guard import require_channel_join, handle_check_join
+from notifier import send_channel_purchase_notif
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +55,8 @@ def t(key: str, lang: str, **fmt) -> str:
 
 def get_now_wib() -> str:
     wib = datetime.now(tz=timezone(timedelta(hours=7)))
-    return wib.strftime(f"%-d %B %Y at %-H:%M WIB")
+    fmt = "%#d %B %Y at %#H:%M WIB" if os.name == "nt" else "%-d %B %Y at %-H:%M WIB"
+    return wib.strftime(fmt)
 
 
 def get_greeting(lang: str = "en") -> str:
@@ -122,9 +126,9 @@ def build_home_text(user, lang: str = "en") -> str:
     product_lines = []
     for i, p in enumerate(active_products, 1):
         stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-        product_lines.append(f"  {get_num_emoji(i)} {escape_md(p['name'])}: {stock} stock | Rp {format_rupiah(p['price'])}")
+        product_lines.append(f"{get_num_emoji(i)} {escape_md(p['name'])}: {stock} stock | Rp {format_rupiah(p['price'])}")
 
-    product_stock_text = "\n".join(product_lines) if product_lines else f"  {t('no_products', lang)}"
+    product_stock_text = "\n".join(product_lines) if product_lines else f"{t('no_products', lang)}"
 
     return (
         f"{get_greeting(lang)}, {first_name}!\n"
@@ -135,7 +139,7 @@ def build_home_text(user, lang: str = "en") -> str:
         f"\n"
         f"*{t('account_stats', lang)}*\n"
         f"{t('username', lang)} : {username}\n"
-        f"ID : {user.id}\n"
+        f"{t('user_id_label', lang)} : {user.id}\n"
         f"{t('total_orders', lang, n=user_orders)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
@@ -189,6 +193,10 @@ def get_main_menu_keyboard(user_id: int = 0, lang: str = "id"):
             InlineKeyboardButton(t("btn_order_history", lang), callback_data="menu:orders"),
         ],
         [
+            InlineKeyboardButton(t("btn_referral", lang), callback_data="menu:referral"),
+            InlineKeyboardButton(t("btn_feedback", lang), callback_data="menu:feedback"),
+        ],
+        [
             InlineKeyboardButton(lang_label, callback_data="menu:lang"),
         ],
     ]
@@ -198,14 +206,22 @@ def get_main_menu_keyboard(user_id: int = 0, lang: str = "id"):
 
 
 def get_admin_panel_keyboard(lang="id"):
+    """Main Admin Panel keyboard with clean sub-menu category buttons."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_sub_products", lang), callback_data="admin:sub_products")],
+        [InlineKeyboardButton(t("btn_sub_orders", lang), callback_data="admin:sub_orders")],
+        [InlineKeyboardButton(t("btn_sub_users", lang), callback_data="admin:sub_users")],
+        [InlineKeyboardButton(t("btn_sub_system", lang), callback_data="admin:sub_system")],
+        [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+    ])
+
+
+def get_admin_products_keyboard(lang="id"):
+    """Sub-menu 1: Produk & Stok."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(t("btn_view_products", lang), callback_data="admin:products"),
             InlineKeyboardButton(t("btn_stock_info", lang), callback_data="admin:stockinfo"),
-        ],
-        [
-            InlineKeyboardButton(t("btn_view_orders", lang), callback_data="admin:orders"),
-            InlineKeyboardButton(t("btn_financial_report", lang), callback_data="admin:report"),
         ],
         [
             InlineKeyboardButton(t("btn_add_product", lang), callback_data="admin:addproduct"),
@@ -217,18 +233,51 @@ def get_admin_panel_keyboard(lang="id"):
         ],
         [
             InlineKeyboardButton(t("btn_export_stock", lang), callback_data="admin:exstock"),
+        ],
+        [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")],
+    ])
+
+
+def get_admin_orders_keyboard(lang="id"):
+    """Sub-menu 2: Pesanan & Keuangan."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t("btn_view_orders", lang), callback_data="admin:orders"),
+            InlineKeyboardButton(t("btn_financial_report", lang), callback_data="admin:report"),
+        ],
+        [
             InlineKeyboardButton(t("btn_search_order", lang), callback_data="admin:search"),
         ],
+        [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")],
+    ])
+
+
+def get_admin_users_keyboard(lang="id"):
+    """Sub-menu 3: Pengguna, Referral & Feedback."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t("btn_user_management", lang), callback_data="admin:users"),
+            InlineKeyboardButton(t("btn_feedback_list", lang), callback_data="admin:feedbacklist"),
+        ],
+        [
+            InlineKeyboardButton(t("btn_withdrawal_requests", lang), callback_data="admin:withdrawals"),
+            InlineKeyboardButton(t("btn_commission_settings", lang), callback_data="admin:commission"),
+        ],
+        [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")],
+    ])
+
+
+def get_admin_system_keyboard(lang="id"):
+    """Sub-menu 4: Sistem & Pengaturan Bot."""
+    return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(t("btn_broadcast", lang), callback_data="admin:broadcast"),
-            InlineKeyboardButton(t("btn_bot_settings", lang), callback_data="admin:settings"),
+            InlineKeyboardButton(t("btn_admin_list", lang), callback_data="admin:adminlist"),
         ],
         [
-            InlineKeyboardButton(t("btn_admin_list", lang), callback_data="admin:adminlist"),
-            InlineKeyboardButton(t("btn_add_admin", lang), callback_data="admin:addadmin"),
-            InlineKeyboardButton(t("btn_remove_admin", lang), callback_data="admin:removeadmin"),
+            InlineKeyboardButton(t("btn_bot_settings", lang), callback_data="admin:settings"),
         ],
-        [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+        [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")],
     ])
 
 
@@ -242,7 +291,146 @@ def get_admin_back_keyboard(lang="id", back_data="menu:admin"):
 _STATUS_EMOJI = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦"}
 
 
+@require_channel_join
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle free-text input for feedback messages and withdrawal flow from regular users."""
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+    admin_state = context.user_data.get("admin_state")
+    withdraw_state = context.user_data.get("withdraw_state")
+
+    if withdraw_state:
+        message = update.message
+        if message is None or not message.text:
+            return
+        text = message.text.strip()
+
+        if text.lower() in ("/cancel", "batal", "cancel"):
+            context.user_data.pop("withdraw_state", None)
+            await message.reply_text(
+                t("cancelled", lang),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+                ]),
+            )
+            return
+
+        if withdraw_state == "bank":
+            context.user_data["withdraw_bank"] = text
+            context.user_data["withdraw_state"] = "account"
+            await message.reply_text(
+                t("withdraw_account_prompt", lang),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(t("cancel", lang), callback_data="menu:referral"),
+                ]]),
+            )
+            return
+
+        if withdraw_state == "account":
+            context.user_data["withdraw_account"] = text
+            context.user_data["withdraw_state"] = "name"
+            await message.reply_text(
+                t("withdraw_name_prompt", lang),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(t("cancel", lang), callback_data="menu:referral"),
+                ]]),
+            )
+            return
+
+        if withdraw_state == "name":
+            context.user_data["withdraw_name"] = text
+            context.user_data["withdraw_state"] = "amount"
+            balance = db.get_user_commission_balance(user_id)
+            await message.reply_text(
+                f"{t('withdraw_amount_prompt', lang)}\n\n💰 {t('withdraw_balance', lang)}: *Rp {format_rupiah(balance)}*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(t("cancel", lang), callback_data="menu:referral"),
+                ]]),
+            )
+            return
+
+        if withdraw_state == "amount":
+            try:
+                amount = int(text.replace(".", "").replace(",", ""))
+            except ValueError:
+                await message.reply_text("Harus angka. Kirim ulang jumlah pencairan:", reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(t("cancel", lang), callback_data="menu:referral"),
+                ]]))
+                return
+
+            balance = db.get_user_commission_balance(user_id)
+            min_wd = db.get_min_withdrawal()
+
+            if amount < min_wd:
+                await message.reply_text(
+                    t("withdraw_below_min", lang, min=format_rupiah(min_wd), balance=format_rupiah(balance)),
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                return
+
+            if amount > balance:
+                await message.reply_text(
+                    t("withdraw_insufficient", lang, balance=format_rupiah(balance)),
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                return
+
+            bank = context.user_data.pop("withdraw_bank", "")
+            account = context.user_data.pop("withdraw_account", "")
+            name = context.user_data.pop("withdraw_name", "")
+            context.user_data.pop("withdraw_state", None)
+
+            wd_id = db.create_withdrawal_request(user_id, amount, bank, account, name)
+            await message.reply_text(
+                t("withdraw_success", lang),
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:referral")],
+                    [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+                ]),
+            )
+
+            try:
+                for admin_id in config.ADMIN_IDS:
+                    admin_lang = db.get_user_lang(admin_id)
+                    user_name = f"@{update.effective_user.username}" if update.effective_user and update.effective_user.username else str(user_id)
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=t("withdraw_notif", admin_lang,
+                            name=user_name, user_id=user_id,
+                            amount=format_rupiah(amount),
+                            bank=bank, account=account, acc_name=name),
+                        parse_mode=ParseMode.MARKDOWN,
+                    )
+            except Exception:
+                pass
+            return
+
+    if admin_state == "feedback_msg":
+        message = update.message
+        if message is None or not message.text:
+            return
+        feedback_text = message.text.strip()
+        category = context.user_data.pop("feedback_category", "lainnya")
+        context.user_data.pop("admin_state", None)
+
+        username = update.effective_user.username or "" if update.effective_user else ""
+        db.add_feedback(user_id, username, category, feedback_text)
+
+        await message.reply_text(
+            t("feedback_sent", lang),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+            ]),
+        )
+
+
 def register(app: Application) -> None:
+    app.add_handler(CallbackQueryHandler(handle_check_join, pattern=r"^check_join$"))
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
@@ -250,14 +438,23 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("produk", cmd_produk))
     app.add_handler(CallbackQueryHandler(handle_global_cancel, pattern=r"^global:cancel_payment$"))
     app.add_handler(CallbackQueryHandler(handle_lang_toggle, pattern=r"^menu:lang$"))
+    app.add_handler(CallbackQueryHandler(handle_referral_claim, pattern=r"^referral:claim$"))
+    app.add_handler(CallbackQueryHandler(handle_feedback_category, pattern=r"^feedback:"))
     app.add_handler(CallbackQueryHandler(handle_menu_button, pattern=r"^menu:"))
     app.add_handler(CallbackQueryHandler(handle_admin_button, pattern=r"^admin:"))
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, handle_text_input), group=5)
 
 
+@require_channel_join
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     message = update.message
     if user is None or message is None:
+        return
+
+    if db.is_user_banned(user.id):
+        lang = get_lang(context, user.id)
+        await message.reply_text(t("banned_alert", lang))
         return
 
     try:
@@ -265,11 +462,29 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as exc:
         logger.exception("Failed upsert user %s: %s", user.id, exc)
 
+    if context.args and context.args[0].startswith("ref_"):
+        ref_code = context.args[0][4:]
+        ref_user = db.get_user_by_referral_code(ref_code)
+        if ref_user and ref_user["user_id"] != user.id:
+            granted = db.set_referred_by(user.id, ref_user["user_id"])
+            if granted:
+                lang = get_lang(context, user.id)
+                try:
+                    referrer_lang = db.get_user_lang(ref_user["user_id"])
+                    await context.bot.send_message(
+                        chat_id=ref_user["user_id"],
+                        text=f"🎉 *Referral baru!* {user.first_name or 'User'} menggunakan kode referral Anda!",
+                        parse_mode=ParseMode.MARKDOWN,
+                    )
+                except Exception:
+                    pass
+
     lang = get_lang(context, user.id)
     text = build_home_text(user, lang)
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu_keyboard(user.id, lang))
 
 
+@require_channel_join
 async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
     if message is None:
@@ -292,6 +507,7 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 
 
+@require_channel_join
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
     if message is None:
@@ -322,6 +538,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
 
+@require_channel_join
 async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
     if message is None:
@@ -421,25 +638,109 @@ async def handle_global_cancel(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 # ---------------------------------------------------------------------------
+# Referral claim handler
+# ---------------------------------------------------------------------------
+
+@require_channel_join
+async def handle_referral_claim(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
+    code = db.generate_referral_code(user_id)
+    ref_count = db.get_referral_count(user_id)
+    ref_list = db.get_referral_list(user_id)
+
+    lines = [
+        f"{t('referral_stats', lang)}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{t('referral_code_label', lang)}: `{code}`\n"
+        f"{t('referral_count', lang)}: *{ref_count}*\n"
+    ]
+
+    if ref_list:
+        lines.append(f"\n📋 *Referral List:*")
+        for r in ref_list[:10]:
+            name = r.get("username") or r.get("first_name") or str(r["referred_id"])
+            lines.append(f"  • @{name}" if r.get("username") else f"  • {name}")
+
+    text = "\n".join(lines)
+    buttons = [
+        [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+    ]
+    await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+# ---------------------------------------------------------------------------
+# Feedback handlers
+# ---------------------------------------------------------------------------
+
+@require_channel_join
+async def handle_feedback_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    lang = get_lang(context, user_id)
+
+    category = query.data.split(":")[1] if query.data else "lainnya"
+    context.user_data["feedback_category"] = category
+    context.user_data["admin_state"] = "feedback_msg"
+
+    cat_label = t(f"feedback_{category}", lang)
+    text = (
+        f"{t('feedback_title', lang)}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{t('feedback_category', lang)}: *{cat_label}*\n\n"
+        f"{t('feedback_send_msg', lang)}"
+    )
+    buttons = [
+        [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:feedback")],
+        [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+    ]
+    await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+# ---------------------------------------------------------------------------
 # Menu button callbacks
 # ---------------------------------------------------------------------------
 
 async def _safe_edit_or_send(query, text: str, reply_markup=None) -> None:
     try:
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
-    except (BadRequest, Exception):
+    except BadRequest as exc:
+        err_msg = str(exc)
+        if "Message is not modified" in err_msg:
+            return
+        bot = query.get_bot() if hasattr(query, "get_bot") else (query.message.get_bot() if query and query.message else None)
         try:
-            await query.message.delete()
+            if query and query.message:
+                await query.message.delete()
         except Exception:
             pass
-        chat_id = query.message.chat_id if query.message else 0
-        if chat_id:
-            await query.bot.send_message(
+        chat_id = query.message.chat_id if (query and query.message) else 0
+        if chat_id and bot:
+            await bot.send_message(
+                chat_id=chat_id, text=text,
+                parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup,
+            )
+    except Exception:
+        bot = query.get_bot() if hasattr(query, "get_bot") else (query.message.get_bot() if query and query.message else None)
+        chat_id = query.message.chat_id if (query and query.message) else 0
+        if chat_id and bot:
+            await bot.send_message(
                 chat_id=chat_id, text=text,
                 parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup,
             )
 
 
+@require_channel_join
 async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if query is None:
@@ -451,6 +752,8 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lang = get_lang(context, user_id)
 
     if action == "start":
+        context.user_data.pop("admin_state", None)
+        context.user_data.pop("feedback_category", None)
         user = update.effective_user
         text = build_home_text(user, lang)
         await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(user_id, lang))
@@ -517,7 +820,16 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 product_name = escape_md(product["name"]) if product else "N/A"
                 lines.append(f"#{oid} | {product_name} x{qty} | Rp {format_rupiah(total)} | {emoji} {status}")
 
-            await _safe_edit_or_send(query, "\n".join(lines), reply_markup=keyboard)
+            buttons = []
+            for o in recent:
+                oid = o.get("id", "")
+                buttons.append([InlineKeyboardButton(
+                    f"📋 Detail #{oid}",
+                    callback_data=f"menu:detail:{oid}",
+                )])
+            buttons.append([InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")])
+
+            await _safe_edit_or_send(query, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
 
         except Exception as e:
             logger.exception("handle_menu orders error: %s", e)
@@ -537,9 +849,9 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         product_lines = []
         for i, p in enumerate(products, 1):
             p_stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-            product_lines.append(f"  {get_num_emoji(i)} {escape_md(p['name'])}: {p_stock} stock | Rp {format_rupiah(p['price'])}")
+            product_lines.append(f"{get_num_emoji(i)} {escape_md(p['name'])}: {p_stock} stock | Rp {format_rupiah(p['price'])}")
 
-        product_stock_text = "\n".join(product_lines) if product_lines else f"  {t('no_products_admin', lang)}"
+        product_stock_text = "\n".join(product_lines) if product_lines else f"{t('no_products_admin', lang)}"
 
         text = (
             f"{t('admin_panel', lang)}\n"
@@ -557,6 +869,164 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"{t('select_admin_menu', lang)}"
         )
         await _safe_edit_or_send(query, text, reply_markup=get_admin_panel_keyboard(lang))
+
+    elif action == "referral":
+        code = db.generate_referral_code(user_id)
+        ref_count = db.get_referral_count(user_id)
+        bot_username = (await context.bot.get_me()).username
+        referral_link = f"https://t.me/{bot_username}?start=ref_{code}"
+        commission_pct = db.get_commission_percent()
+        balance = db.get_user_commission_balance(user_id)
+        total_earned = db.get_user_total_commission(user_id)
+        min_wd = db.get_min_withdrawal()
+
+        text = (
+            f"{t('referral_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔑 {t('referral_code_label', lang)}: `{code}`\n"
+            f"{t('referral_link', lang)}:\n`{referral_link}`\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('referral_count', lang)}: *{ref_count}*\n"
+            f"{t('commission_rate_label', lang)}: *{commission_pct}%*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('commission_earned', lang)}: *Rp {format_rupiah(total_earned)}*\n"
+            f"{t('commission_balance', lang)}: *Rp {format_rupiah(balance)}*\n"
+            f"{t('withdraw_min', lang)}: Rp {format_rupiah(min_wd)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('referral_share', lang)}"
+        )
+        buttons = [
+            [InlineKeyboardButton(t("btn_commission_history", lang), callback_data="menu:commission_history")],
+            [InlineKeyboardButton(t("btn_withdraw", lang), callback_data="menu:withdraw")],
+            [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+        ]
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "commission_history":
+        commissions = db.get_user_commissions(user_id, limit=15)
+        lines = [f"{t('commission_history', lang)}\n━━━━━━━━━━━━━━━━━━━━━━━━\n"]
+        if not commissions:
+            lines.append(t("commission_no_history", lang))
+        else:
+            for c in commissions:
+                name = c.get("referred_username") or c.get("referred_name") or str(c["referred_id"])
+                lines.append(
+                    f"💰 +Rp {format_rupiah(c['commission_amount'])} "
+                    f"{t('commission_from', lang)} @{name} "
+                    f"{t('commission_on_order', lang)} #{c['order_id']}\n"
+                    f"📅 {c['created_at']}"
+                )
+        buttons = [
+            [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:referral")],
+            [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+        ]
+        await _safe_edit_or_send(query, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "withdraw":
+        balance = db.get_user_commission_balance(user_id)
+        min_wd = db.get_min_withdrawal()
+
+        if balance < min_wd:
+            await query.answer(
+                t("withdraw_below_min", lang, min=format_rupiah(min_wd), balance=format_rupiah(balance)),
+                show_alert=True,
+            )
+            return
+
+        context.user_data["withdraw_state"] = "bank"
+        text = (
+            f"{t('withdraw_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('withdraw_balance', lang)}: *Rp {format_rupiah(balance)}*\n"
+            f"{t('withdraw_min', lang)}: Rp {format_rupiah(min_wd)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('withdraw_bank_prompt', lang)}"
+        )
+        buttons = [
+            [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:referral")],
+            [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+        ]
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "withdraw_history":
+        withdrawals = db.get_user_withdrawals(user_id, limit=10)
+        lines = [f"{t('withdraw_history', lang)}\n━━━━━━━━━━━━━━━━━━━━━━━━\n"]
+        if not withdrawals:
+            lines.append(t("withdraw_no_history", lang))
+        else:
+            status_map = {"pending": t("withdraw_pending", lang), "approved": t("withdraw_approved", lang), "rejected": t("withdraw_rejected", lang)}
+            for w in withdrawals:
+                s = status_map.get(w["status"], w["status"])
+                lines.append(t("withdraw_detail", lang,
+                    id=w["id"], amount=format_rupiah(w["amount"]), status=s,
+                    bank=w.get("bank_name", "-"), account=w.get("account_number", "-"),
+                    name=w.get("account_name", "-"), date=w.get("created_at", "-")))
+        buttons = [
+            [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:referral")],
+            [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+        ]
+        await _safe_edit_or_send(query, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "feedback":
+        context.user_data["feedback_category"] = "umum"
+        context.user_data["admin_state"] = "feedback_msg"
+        text = (
+            f"{t('feedback_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{t('feedback_send_msg', lang)}"
+        )
+        buttons = [
+            [InlineKeyboardButton(t("cancel", lang), callback_data="menu:start")],
+        ]
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "detail":
+        parts = query.data.split(":")
+        if len(parts) < 3:
+            return
+        order_id = parts[2]
+        order = db.get_order(order_id)
+        if not order or order["user_id"] != user_id:
+            await query.answer("Pesanan tidak ditemukan.", show_alert=True)
+            return
+
+        product = db.get_product(order.get("product_id", 1))
+        product_name = escape_md(product["name"]) if product else "N/A"
+        detail = db.get_purchase_detail(order_id)
+
+        status_emoji = {"pending": "⏳", "paid": "✅", "cancelled": "❌", "delivered": "📦"}.get(order.get("status", ""), "⏳")
+
+        text = (
+            f"{t('purchase_detail_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('purchase_detail_order', lang)}: `#{order_id}`\n"
+            f"{t('purchase_detail_product', lang)}: *{product_name}*\n"
+            f"{t('purchase_detail_qty', lang)}: {order['quantity']} {t('accounts', lang)}\n"
+            f"{t('purchase_detail_total', lang)}: *Rp {format_rupiah(order['total'])}*\n"
+        )
+
+        if order.get("original_total") and order["original_total"] > order["total"]:
+            discount = order["original_total"] - order["total"]
+            text += f"{t('purchase_detail_discount', lang)}: -Rp {format_rupiah(discount)}\n"
+        if order.get("voucher_code"):
+            text += f"{t('purchase_detail_voucher', lang)}: `{order['voucher_code']}`\n"
+
+        text += (
+            f"{t('purchase_detail_status', lang)}: {status_emoji} {order.get('status', '').upper()}\n"
+            f"{t('purchase_detail_date', lang)}: {order.get('created_at', '-')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        )
+
+        if detail and detail.get("accounts_delivered"):
+            text += f"\n{t('purchase_detail_accounts', lang)}:\n```\n{detail['accounts_delivered']}\n```"
+        elif order.get("status") == "paid":
+            text += f"\n{t('purchase_detail_accounts', lang)}: Menunggu..."
+
+        buttons = [
+            [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:orders")],
+            [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
+        ]
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ---------------------------------------------------------------------------
@@ -584,7 +1054,23 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         if key.startswith("admin_state") or key in ("addstock_product_id", "setprice_product_id", "addadmin_id"):
             del context.user_data[key]
 
-    if action == "products":
+    if action == "sub_products":
+        text = f"*{t('btn_sub_products', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nPilih fitur kelola produk & stok di bawah ini:"
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_products_keyboard(lang))
+
+    elif action == "sub_orders":
+        text = f"*{t('btn_sub_orders', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nPilih fitur kelola pesanan & keuangan di bawah ini:"
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_orders_keyboard(lang))
+
+    elif action == "sub_users":
+        text = f"*{t('btn_sub_users', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nPilih fitur kelola pengguna & referral di bawah ini:"
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_users_keyboard(lang))
+
+    elif action == "sub_system":
+        text = f"*{t('btn_sub_system', lang)}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\nPilih fitur sistem & pengaturan bot di bawah ini:"
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_system_keyboard(lang))
+
+    elif action == "products":
         products = db.get_all_products()
         if not products:
             await _safe_edit_or_send(
@@ -600,8 +1086,8 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             status = "✅" if p["is_active"] else "❌"
             lines.append(
                 f"{status} {get_num_emoji(i)} | *{escape_md(p['name'])}*\n"
-                f"   💰 {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
-                f"   📦 {t('admin_stock', lang)}: {stock}\n"
+                f"   {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
+                f"   {t('admin_stock', lang)}: {stock}\n"
             )
 
         await _safe_edit_or_send(
@@ -1231,6 +1717,318 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         ]
         await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
+    elif action == "users":
+        users = db.get_all_users_detail(limit=20)
+        if not users:
+            await _safe_edit_or_send(query, t("user_mgmt_title", lang) + "\n\nBelum ada pengguna.", reply_markup=get_admin_back_keyboard(lang))
+            return
+
+        lines = [f"{t('user_mgmt_title', lang)}\n"]
+        buttons = []
+        for u in users[:15]:
+            name = f"@{u['username']}" if u.get("username") else u.get("first_name", str(u["user_id"]))
+            ban_icon = "🚫" if u.get("is_banned") else ""
+            lines.append(f"• {ban_icon} {name} | {u.get('total_orders', 0)} orders | Rp {format_rupiah(u.get('total_spent', 0))}")
+            buttons.append([InlineKeyboardButton(
+                f"👤 {name} ({u.get('total_orders', 0)} orders)",
+                callback_data=f"admin:userdetail:{u['user_id']}",
+            )])
+
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")])
+        await _safe_edit_or_send(query, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "userdetail":
+        if len(parts) < 3:
+            return
+        try:
+            uid = int(parts[2])
+        except ValueError:
+            return
+        user = db.get_user_detail(uid)
+        if not user:
+            await query.answer("User tidak ditemukan!", show_alert=True)
+            return
+
+        ban_status = f"🚫 *DIBLOKIR* - {user.get('ban_reason', '')}" if user.get("is_banned") else "✅ Aktif"
+        name = f"@{user['username']}" if user.get("username") else user.get("first_name", "N/A")
+
+        text = (
+            f"{t('user_detail_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 ID: `{user['user_id']}`\n"
+            f"👤 Name: *{name}*\n"
+            f"📊 Status: {ban_status}\n"
+            f"{t('user_total_orders', lang)}: *{user.get('total_orders', 0)}*\n"
+            f"{t('user_total_spent', lang)}: *Rp {format_rupiah(user.get('total_spent', 0))}*\n"
+            f"{t('user_joined', lang)}: {user.get('last_seen', '-')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+
+        if user.get("is_banned"):
+            btn_ban = InlineKeyboardButton(t("user_unban_btn", lang), callback_data=f"admin:unban:{uid}")
+        else:
+            btn_ban = InlineKeyboardButton(t("user_ban_btn", lang), callback_data=f"admin:ban:{uid}")
+
+        buttons = [
+            [btn_ban],
+            [InlineKeyboardButton(t("btn_back", lang), callback_data="admin:users")],
+            [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
+        ]
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "ban":
+        if len(parts) < 3:
+            return
+        try:
+            uid = int(parts[2])
+        except ValueError:
+            return
+        context.user_data["admin_state"] = "user_ban_reason"
+        context.user_data["ban_user_id"] = uid
+        await _safe_edit_or_send(query, t("user_ban_reason_prompt", lang), reply_markup=get_admin_back_keyboard(lang))
+
+    elif action == "unban":
+        if len(parts) < 3:
+            return
+        try:
+            uid = int(parts[2])
+        except ValueError:
+            return
+        db.unban_user(uid)
+        await query.answer(t("user_unbanned_success", lang, id=uid), show_alert=True)
+        user = db.get_user_detail(uid)
+        if user:
+            ban_status = "✅ Aktif"
+            name = f"@{user['username']}" if user.get("username") else user.get("first_name", "N/A")
+            text = (
+                f"{t('user_detail_title', lang)}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🆔 ID: `{uid}`\n"
+                f"👤 Name: *{name}*\n"
+                f"📊 Status: {ban_status}\n"
+                f"{t('user_total_orders', lang)}: *{user.get('total_orders', 0)}*\n"
+                f"{t('user_total_spent', lang)}: *Rp {format_rupiah(user.get('total_spent', 0))}*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+            buttons = [
+                [InlineKeyboardButton(t("user_ban_btn", lang), callback_data=f"admin:ban:{uid}")],
+                [InlineKeyboardButton(t("btn_back", lang), callback_data="admin:users")],
+                [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
+            ]
+            await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "feedbacklist":
+        feedbacks = db.get_all_feedback(limit=20)
+        if not feedbacks:
+            await _safe_edit_or_send(query, t("feedback_no_items", lang), reply_markup=get_admin_back_keyboard(lang))
+            return
+
+        lines = [f"{t('admin_feedback_list', lang)}\n"]
+        buttons = []
+        for fb in feedbacks[:10]:
+            status_icon = "✅" if fb["status"] == "replied" else "⚪" if fb["status"] == "closed" else "🔵"
+            cat = fb.get("category", "lainnya")
+            lines.append(f"{status_icon} #{fb['id']} | @{fb.get('username', '?')} | {cat}")
+            buttons.append([InlineKeyboardButton(
+                f"{status_icon} #{fb['id']} - @{fb.get('username', '?')} ({cat})",
+                callback_data=f"admin:fbdetail:{fb['id']}",
+            )])
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")])
+        await _safe_edit_or_send(query, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "fbdetail":
+        if len(parts) < 3:
+            return
+        try:
+            fid = int(parts[2])
+        except ValueError:
+            return
+        feedbacks = db.get_all_feedback()
+        fb = next((x for x in feedbacks if x["id"] == fid), None)
+        if not fb:
+            await query.answer("Feedback tidak ditemukan!", show_alert=True)
+            return
+
+        status_icon = "✅" if fb["status"] == "replied" else "⚪" if fb["status"] == "closed" else "🔵"
+        text = (
+            f"💬 *FEEDBACK #{fb['id']}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 @{fb.get('username', '?')} (ID: `{fb['user_id']}`)\n"
+            f"📂 Kategori: *{fb.get('category', '-')}*\n"
+            f"Status: {status_icon} *{fb['status'].upper()}*\n"
+            f"📅 {fb.get('created_at', '-')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📝 *Pesan:*\n{fb['message']}\n"
+        )
+        if fb.get("admin_reply"):
+            text += f"\n💬 *Balasan Admin:*\n{fb['admin_reply']}\n"
+
+        buttons = []
+        if fb["status"] != "replied":
+            buttons.append([InlineKeyboardButton("💬 Reply", callback_data=f"admin:fbreply:{fid}")])
+        buttons.append([InlineKeyboardButton("🔒 Close", callback_data=f"admin:fbclose:{fid}")])
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="admin:feedbacklist")])
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "fbreply":
+        if len(parts) < 3:
+            return
+        try:
+            fid = int(parts[2])
+        except ValueError:
+            return
+        context.user_data["admin_state"] = "feedback_reply"
+        context.user_data["feedback_reply_id"] = fid
+        await _safe_edit_or_send(query, t("feedback_reply_prompt", lang), reply_markup=get_admin_back_keyboard(lang))
+
+    elif action == "fbclose":
+        if len(parts) < 3:
+            return
+        try:
+            fid = int(parts[2])
+        except ValueError:
+            return
+        db.close_feedback(fid)
+        await query.answer("Feedback ditutup!", show_alert=True)
+        await handle_admin_button(update, context)
+
+    elif action == "commission":
+        pct = db.get_commission_percent()
+        min_wd = db.get_min_withdrawal()
+        text = (
+            f"{t('admin_commission_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('admin_commission_rate', lang)}: *{pct}%*\n"
+            f"{t('admin_min_withdrawal', lang)}: *Rp {format_rupiah(min_wd)}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        buttons = [
+            [InlineKeyboardButton(f"📊 {t('admin_set_commission', lang)} ({pct}%)", callback_data="admin:setcommission")],
+            [InlineKeyboardButton(f"💸 {t('admin_set_min_withdraw', lang)} (Rp {format_rupiah(min_wd)})", callback_data="admin:setminwithdraw")],
+            [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")],
+        ]
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "setcommission":
+        context.user_data["admin_state"] = "setcommission"
+        text = (
+            f"{t('admin_commission_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Kirimkan persentase komisi baru (1-50):"
+        )
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang, back_data="admin:commission"))
+
+    elif action == "setminwithdraw":
+        context.user_data["admin_state"] = "setminwithdraw"
+        text = (
+            f"{t('admin_commission_title', lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Kirimkan jumlah minimal pencairan baru (minimal Rp 10.000):"
+        )
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang, back_data="admin:commission"))
+
+    elif action == "withdrawals":
+        withdrawals = db.get_pending_withdrawals()
+        lines = [f"{t('admin_withdrawal_title', lang)}\n"]
+        buttons = []
+        if not withdrawals:
+            lines.append(f"\n{t('admin_no_withdrawals', lang)}")
+        else:
+            for w in withdrawals[:10]:
+                name = f"@{w['username']}" if w.get("username") else w.get("first_name", str(w["user_id"]))
+                lines.append(
+                    f"💸 #{w['id']} | {name} | Rp {format_rupiah(w['amount'])} | {w.get('bank_name', '-')}"
+                )
+                buttons.append([InlineKeyboardButton(
+                    f"💸 #{w['id']} - {name} - Rp {format_rupiah(w['amount'])}",
+                    callback_data=f"admin:wddetail:{w['id']}",
+                )])
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")])
+        await _safe_edit_or_send(query, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "wddetail":
+        if len(parts) < 3:
+            return
+        try:
+            wd_id = int(parts[2])
+        except ValueError:
+            return
+        wd = db.get_withdrawal_request(wd_id)
+        if not wd:
+            await query.answer("Withdrawal tidak ditemukan!", show_alert=True)
+            return
+
+        name = f"@{wd['username']}" if wd.get("username") else wd.get("first_name", str(wd["user_id"]))
+        status_map = {"pending": "⏳ Pending", "approved": "✅ Approved", "rejected": "❌ Rejected"}
+        status_label = status_map.get(wd["status"], wd["status"])
+
+        text = t("admin_withdraw_detail", lang,
+            id=wd_id, name=name, user_id=wd["user_id"],
+            bank=wd.get("bank_name", "-"), account=wd.get("account_number", "-"),
+            acc_name=wd.get("account_name", "-"), amount=format_rupiah(wd["amount"]),
+            status=status_label, date=wd.get("created_at", "-"))
+
+        buttons = []
+        if wd["status"] == "pending":
+            buttons.append([
+                InlineKeyboardButton(t("admin_approve_withdraw", lang), callback_data=f"admin:wdapprove:{wd_id}"),
+                InlineKeyboardButton(t("admin_reject_withdraw", lang), callback_data=f"admin:wdreject:{wd_id}"),
+            ])
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="admin:withdrawals")])
+        await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif action == "wdapprove":
+        if len(parts) < 3:
+            return
+        try:
+            wd_id = int(parts[2])
+        except ValueError:
+            return
+        wd = db.get_withdrawal_request(wd_id)
+        if not wd or wd["status"] != "pending":
+            await query.answer("Withdrawal tidak valid!", show_alert=True)
+            return
+
+        db.process_withdrawal(wd_id, "approved", "Approved by admin")
+        try:
+            user_lang = db.get_user_lang(wd["user_id"])
+            await context.bot.send_message(
+                chat_id=wd["user_id"],
+                text=t("withdraw_approved_notif", user_lang, id=wd_id, amount=format_rupiah(wd["amount"])),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception:
+            pass
+
+        await query.answer(f"✅ Withdrawal #{wd_id} approved!", show_alert=True)
+        await handle_admin_button(update, context)
+
+    elif action == "wdreject":
+        if len(parts) < 3:
+            return
+        try:
+            wd_id = int(parts[2])
+        except ValueError:
+            return
+        wd = db.get_withdrawal_request(wd_id)
+        if not wd or wd["status"] != "pending":
+            await query.answer("Withdrawal tidak valid!", show_alert=True)
+            return
+
+        db.process_withdrawal(wd_id, "rejected", "Rejected by admin")
+        try:
+            user_lang = db.get_user_lang(wd["user_id"])
+            await context.bot.send_message(
+                chat_id=wd["user_id"],
+                text=t("withdraw_rejected_notif", user_lang, id=wd_id, reason="Ditolak oleh admin"),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception:
+            pass
+
+        await query.answer(f"❌ Withdrawal #{wd_id} rejected!", show_alert=True)
+        await handle_admin_button(update, context)
+
     elif action == "apv":
         if len(parts) < 3:
             return
@@ -1296,9 +2094,48 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
                 document=file_bytes,
                 caption=caption,
                 parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu_keyboard(order["user_id"], buyer_lang),
             )
         except Exception as err:
             logger.exception("Failed to send document to buyer %s: %s", order["user_id"], err)
+
+        qris_msg_id = order.get("qris_message_id")
+        if qris_msg_id:
+            try:
+                await context.bot.delete_message(chat_id=order["user_id"], message_id=qris_msg_id)
+            except Exception:
+                pass
+
+        try:
+            await send_channel_purchase_notif(context.bot, order, product_name)
+        except Exception as err:
+            logger.warning("Failed to send channel purchase notif: %s", err)
+
+        # --- Apply referral commission ---
+        try:
+            buyer_user = db._conn.execute("SELECT referred_by FROM users WHERE user_id = ?", (order["user_id"],)).fetchone()
+            if buyer_user and buyer_user["referred_by"]:
+                referrer_id = buyer_user["referred_by"]
+                if not db.has_commission_for_order(order_id):
+                    commission_pct = db.get_commission_percent()
+                    order_amount = order.get("total", 0)
+                    commission_amount = int(order_amount * commission_pct / 100)
+                    if commission_amount > 0:
+                        db.add_commission(referrer_id, order["user_id"], order_id, order_amount, commission_pct, commission_amount)
+                        try:
+                            referrer_lang = db.get_user_lang(referrer_id)
+                            await context.bot.send_message(
+                                chat_id=referrer_id,
+                                text=t("commission_notif", referrer_lang,
+                                    amount=format_rupiah(commission_amount),
+                                    name=order.get("first_name") or order.get("username") or str(order["user_id"]),
+                                    order_id=order_id),
+                                parse_mode=ParseMode.MARKDOWN,
+                            )
+                        except Exception:
+                            pass
+        except Exception as exc:
+            logger.exception("Admin approve commission failed for order %s: %s", order_id, exc)
 
         await query.answer(f"✅ Order #{order_id} berhasil di-approve!", show_alert=True)
         await _safe_edit_or_send(query, f"✅ *Pesanan #{order_id} BERHASIL DI-APPROVE!*\n\nProduk telah dikirimkan ke pembeli.", reply_markup=get_admin_back_keyboard(lang))

@@ -14,7 +14,8 @@ T = {
     # ── Home ───────────────────────────────────────────────────────────────
     "welcome":         {"en": "Welcome to *{shop}*.",      "id": "Selamat datang di *{shop}*."},
     "account_stats":   {"en": "👤 ACCOUNT STATS",          "id": "👤 STATISTIK AKUN"},
-    "username":        {"en": "Username",                   "id": "Nama Pengguna"},
+    "username":        {"en": "👤 Username",                "id": "👤 Nama Pengguna"},
+    "user_id_label":   {"en": "🆔 User ID",                 "id": "🆔 ID Pengguna"},
     "total_orders":    {"en": "📦 Total Orders : {n} transactions", "id": "📦 Total Pesanan : {n} transaksi"},
     "bot_stats":       {"en": "📊 BOT STATS",              "id": "📊 STATISTIK BOT"},
     "accounts_sold":   {"en": "📨 Accounts Sold : {n}",    "id": "📨 Akun Terjual : {n}"},
@@ -180,6 +181,12 @@ T = {
     "btn_remove_admin":     {"en": "👤 Remove Admin",       "id": "👤 Hapus Admin"},
     "btn_back_to_admin":    {"en": "⬅️ Back to Admin Panel","id": "⬅️ Kembali ke Panel Admin"},
     "btn_back_to_menu":     {"en": "🏠 Back to Menu",       "id": "🏠 Menu Utama"},
+    "btn_feedback_list":    {"en": "💬 Feedback List",      "id": "💬 Kelola Feedback"},
+    "btn_sub_products":     {"en": "📦 Products & Stock",   "id": "📦 Kelola Produk"},
+    "btn_sub_orders":       {"en": "📋 Orders & Revenue",   "id": "📋 Pesanan & Keuangan"},
+    "btn_sub_users":       {"en": "👥 Users & Referrals",  "id": "👥 Kelola Pengguna & Referral"},
+    "btn_sub_system":      {"en": "⚙️ System & Settings",  "id": "⚙️ Sistem Bot"},
+
 
     # Admin new features
     "admin_financial_report_title": {"en": "*📊 FINANCIAL REPORT*", "id": "*📊 LAPORAN KEUANGAN*"},
@@ -336,4 +343,144 @@ T = {
     "cmd_removeadmin_usage":  {"en": "Use: `/removeadmin <telegram_user_id>`\n\n⚠️ Cannot remove the main admin.", "id": "Gunakan: `/removeadmin <telegram_user_id>`\n\n⚠️ Tidak dapat menghapus admin utama."},
     "date_label":             {"en": "Date", "id": "Tanggal"},
     "status_label_header":    {"en": "Status", "id": "Status"},
+
+    # ══════════════════════════════════════════════════════════════════════
+    # REFERRAL SYSTEM
+    # ══════════════════════════════════════════════════════════════════════
+    "btn_referral":           {"en": "🔗 Referral Program", "id": "🔗 Program Referral"},
+    "referral_title":         {"en": "*🔗 REFERRAL PROGRAM*", "id": "*🔗 PROGRAM REFERRAL*"},
+    "referral_code_label":    {"en": "Your Referral Code", "id": "Kode Referral Anda"},
+    "referral_share":         {"en": "Share this link to invite friends:", "id": "Bagikan tautan ini untuk mengajak teman:"},
+    "referral_link":          {"en": "🔗 Referral Link", "id": "🔗 Tautan Referral"},
+    "referral_count":         {"en": "👥 Total Referrals", "id": "👥 Total Referral"},
+    "referral_bonus":         {"en": "💰 Referral Bonus", "id": "💰 Bonus Referral"},
+    "referral_claimed":       {"en": "✅ Bonus claimed!", "id": "✅ Bonus berhasil diklaim!"},
+    "referral_already_claimed": {"en": "⚠️ You already claimed the referral bonus.", "id": "⚠️ Anda sudah mengklaim bonus referral."},
+    "referral_invalid":       {"en": "❌ Invalid referral code.", "id": "❌ Kode referral tidak valid."},
+    "referral_self":          {"en": "❌ You cannot use your own referral code.", "id": "❌ Anda tidak bisa menggunakan kode referral sendiri."},
+    "referral_used_code":     {"en": "🔗 Use referral code on first purchase:", "id": "🔗 Gunakan kode referral saat pembelian pertama:"},
+    "referral_stats":         {"en": "*📊 Referral Stats*", "id": "*📊 Statistik Referral*"},
+    "referral_list_empty":    {"en": "No referrals yet.", "id": "Belum ada referral."},
+    "btn_use_referral":       {"en": "🔗 Use Referral Code", "id": "🔗 Gunakan Kode Referral"},
+    "referral_enter_code":    {"en": "Send your referral code:", "id": "Kirimkan kode referral Anda:"},
+    "referral_applied":       {"en": "✅ Referral code *{code}* applied!", "id": "✅ Kode referral *{code}* berhasil diterapkan!"},
+    "referral_claim_bonus_btn": {"en": "🎁 Claim Bonus", "id": "🎁 Klaim Bonus"},
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PURCHASE DETAILS
+    # ══════════════════════════════════════════════════════════════════════
+    "btn_purchase_detail":    {"en": "📋 Purchase Detail", "id": "📋 Detail Pembelian"},
+    "purchase_detail_title":  {"en": "*📋 PURCHASE DETAIL*", "id": "*📋 DETAIL PEMBELIAN*"},
+    "purchase_detail_order":  {"en": "🆔 Order ID", "id": "🆔 ID Pesanan"},
+    "purchase_detail_product": {"en": "📦 Product", "id": "📦 Produk"},
+    "purchase_detail_qty":    {"en": "🔢 Quantity", "id": "🔢 Jumlah"},
+    "purchase_detail_total":  {"en": "💰 Total Paid", "id": "💰 Total Bayar"},
+    "purchase_detail_status": {"en": "📊 Status", "id": "📊 Status"},
+    "purchase_detail_date":   {"en": "📅 Date", "id": "📅 Tanggal"},
+    "purchase_detail_accounts": {"en": "🔐 Accounts Delivered", "id": "🔐 Akun Diterima"},
+    "purchase_detail_voucher": {"en": "🎟️ Voucher Used", "id": "🎟️ Voucher Digunakan"},
+    "purchase_detail_discount": {"en": "💸 Discount", "id": "💸 Diskon"},
+    "no_purchase_details":    {"en": "No purchase details available.", "id": "Detail pembelian belum tersedia."},
+    "btn_download_again":     {"en": "📥 Download Again", "id": "📥 Download Ulang"},
+
+    # ══════════════════════════════════════════════════════════════════════
+    # FEEDBACK / KRITIK SARAN
+    # ══════════════════════════════════════════════════════════════════════
+    "btn_feedback":           {"en": "💬 Feedback", "id": "💬 Kritik & Saran"},
+    "feedback_title":         {"en": "*💬 FEEDBACK*", "id": "*💬 KRITIK & SARAN*"},
+    "feedback_category":      {"en": "Category", "id": "Kategori"},
+    "feedback_saran":         {"en": "💡 Suggestion", "id": "💡 Saran"},
+    "feedback_kritik":        {"en": "🔴 Complaint", "id": "🔴 Keluhan"},
+    "feedback_bugs":          {"en": "🐛 Bug Report", "id": "🐛 Laporan Bug"},
+    "feedback_lainnya":       {"en": "📝 Other", "id": "📝 Lainnya"},
+    "feedback_select_cat":    {"en": "Select category:", "id": "Pilih kategori:"},
+    "feedback_send_msg":      {"en": "Send your feedback message:", "id": "Kirimkan pesan kritik/saran Anda:"},
+    "feedback_sent":          {"en": "✅ Feedback sent! Admin will review it.", "id": "✅ Feedback terkirim! Admin akan meninjaunya."},
+    "feedback_thanks":        {"en": "Thank you for your feedback! 🙏", "id": "Terima kasih atas feedback Anda! 🙏"},
+    "feedback_list_title":    {"en": "*💬 FEEDBACK LIST*", "id": "*💬 DAFTAR FEEDBACK*"},
+    "feedback_no_items":      {"en": "No feedback yet.", "id": "Belum ada feedback."},
+    "feedback_reply_prompt":  {"en": "Send your reply:", "id": "Kirimkan balasan Anda:"},
+    "feedback_reply_sent":    {"en": "✅ Reply sent to user!", "id": "✅ Balasan terkirim ke pengguna!"},
+    "feedback_reply_to_user": {"en": "*💬 Admin Reply*\n\nYour feedback has been reviewed:\n\n{reply}", "id": "*💬 Balasan Admin*\n\nFeedback Anda telah ditinjau:\n\n{reply}"},
+
+    # ══════════════════════════════════════════════════════════════════════
+    # USER MANAGEMENT (ADMIN)
+    # ══════════════════════════════════════════════════════════════════════
+    "btn_user_management":    {"en": "👥 User Management", "id": "👥 Kelola Pengguna"},
+    "user_mgmt_title":        {"en": "*👥 USER MANAGEMENT*", "id": "*👥 KELOLA PENGGUNA*"},
+    "user_detail_title":      {"en": "*👤 USER DETAIL*", "id": "*👤 DETAIL PENGGUNA*"},
+    "user_banned":            {"en": "🚫 User BANNED", "id": "🚫 Pengguna DIBLOKIR"},
+    "user_ban_reason":        {"en": "Reason", "id": "Alasan"},
+    "user_total_orders":      {"en": "📦 Total Orders", "id": "📦 Total Pesanan"},
+    "user_total_spent":       {"en": "💰 Total Spent", "id": "💰 Total Belanja"},
+    "user_joined":            {"en": "📅 Joined", "id": "📅 Bergabung"},
+    "user_last_seen":         {"en": "🕐 Last Seen", "id": "🕐 Terakhir Aktif"},
+    "user_ban_btn":           {"en": "🚫 Ban User", "id": "🚫 Blokir Pengguna"},
+    "user_unban_btn":         {"en": "✅ Unban User", "id": "✅ Buka Blokir"},
+    "user_banned_success":    {"en": "✅ User {id} has been banned.", "id": "✅ Pengguna {id} telah diblokir."},
+    "user_unbanned_success":  {"en": "✅ User {id} has been unbanned.", "id": "✅ Blokir pengguna {id} telah dibuka."},
+    "user_ban_reason_prompt": {"en": "Send the ban reason:", "id": "Kirimkan alasan pemblokiran:"},
+    "banned_alert":           {"en": "⚠️ Your account has been blocked. Contact admin for more info.", "id": "⚠️ Akun Anda telah diblokir. Hubungi admin untuk info lebih lanjut."},
+    "admin_feedback_list":    {"en": "*💬 FEEDBACK MANAGEMENT*", "id": "*💬 KELOLA FEEDBACK*"},
+
+    # ── Navigation buttons (new) ─────────────────────────────────────────
+    "btn_detail_history":     {"en": "📋 Detail History", "id": "📋 Riwayat Detail"},
+    "btn_back_to_history":    {"en": "⬅️ Back to History", "id": "⬅️ Kembali ke Riwayat"},
+
+    # ══════════════════════════════════════════════════════════════════════
+    # REFERRAL COMMISSION SYSTEM
+    # ══════════════════════════════════════════════════════════════════════
+    "commission_balance":      {"en": "💰 Commission Balance", "id": "💰 Saldo Komisi"},
+    "commission_earned":       {"en": "📈 Total Earned", "id": "📈 Total Diperoleh"},
+    "commission_rate_label":   {"en": "📊 Commission Rate", "id": "📊 Rate Komisi"},
+    "commission_history":      {"en": "*💰 COMMISSION HISTORY*", "id": "*💰 RIWAYAT KOMISI*"},
+    "commission_from":         {"en": "from", "id": "dari"},
+    "commission_on_order":     {"en": "on order", "id": "pada pesanan"},
+    "commission_no_history":   {"en": "No commission history yet.", "id": "Belum ada riwayat komisi."},
+    "commission_notif":        {"en": "🎉 You earned *Rp {amount}* commission from {name}'s purchase! (Order #{order_id})", "id": "🎉 Anda memperoleh komisi *Rp {amount}* dari pembelian {name}! (Pesanan #{order_id})"},
+
+    # Withdrawal
+    "withdraw_title":          {"en": "*💸 WITHDRAWAL*", "id": "*💸 PENCAIRAN DANA*"},
+    "withdraw_balance":        {"en": "💰 Available Balance", "id": "💰 Saldo Tersedia"},
+    "withdraw_min":            {"en": "💸 Minimum withdrawal", "id": "💸 Pencairan minimum"},
+    "withdraw_btn":            {"en": "💸 Withdraw", "id": "💸 Tarik Dana"},
+    "withdraw_bank_prompt":    {"en": "Send your *bank name* (e.g. BCA, Mandiri, BRI):", "id": "Kirimkan *nama bank* Anda (contoh: BCA, Mandiri, BRI):"},
+    "withdraw_account_prompt": {"en": "Send your *account number*:", "id": "Kirimkan *nomor rekening* Anda:"},
+    "withdraw_name_prompt":    {"en": "Send your *account holder name*:", "id": "Kirimkan *nama pemegang rekening*:"},
+    "withdraw_amount_prompt":  {"en": "Send withdrawal *amount* (Rp):", "id": "Kirimkan *jumlah* pencairan (Rp):"},
+    "withdraw_success":        {"en": "✅ Withdrawal request sent! Admin will process it shortly.", "id": "✅ Permintaan pencairan terkirim! Admin akan segera memprosesnya."},
+    "withdraw_pending":        {"en": "⏳ Waiting", "id": "⏳ Menunggu"},
+    "withdraw_approved":       {"en": "✅ Approved", "id": "✅ Disetujui"},
+    "withdraw_rejected":       {"en": "❌ Rejected", "id": "❌ Ditolak"},
+    "withdraw_insufficient":   {"en": "❌ Insufficient balance. Your balance: Rp {balance}", "id": "❌ Saldo tidak cukup. Saldo Anda: Rp {balance}"},
+    "withdraw_below_min":      {"en": "❌ Minimum withdrawal is Rp {min}. Your balance: Rp {balance}", "id": "❌ Pencairan minimum adalah Rp {min}. Saldo Anda: Rp {balance}"},
+    "withdraw_request_sent":   {"en": "✅ Withdrawal request #{id} sent!", "id": "✅ Permintaan pencairan #{id} terkirim!"},
+    "withdraw_history":        {"en": "*💸 WITHDRAWAL HISTORY*", "id": "*💸 RIWAYAT PENCAIRAN*"},
+    "withdraw_no_history":     {"en": "No withdrawal history.", "id": "Belum ada riwayat pencairan."},
+    "withdraw_detail":         {"en": "💸 #{id} | Rp {amount} | {status}\n🏦 {bank} - {account} ({name})\n📅 {date}", "id": "💸 #{id} | Rp {amount} | {status}\n🏦 {bank} - {account} ({name})\n📅 {date}"},
+    "withdraw_notif":          {"en": "💸 New withdrawal request!\nUser: {name} (ID: {user_id})\nAmount: Rp {amount}\n🏦 {bank} - {account} ({acc_name})", "id": "💸 Permintaan pencairan baru!\nPengguna: {name} (ID: {user_id})\nJumlah: Rp {amount}\n🏦 {bank} - {account} ({acc_name})"},
+    "withdraw_approved_notif": {"en": "✅ Your withdrawal request #{id} has been approved!\nAmount: Rp {amount} has been sent to your account.", "id": "✅ Permintaan pencairan #{id} telah disetujui!\nJumlah: Rp {amount} telah dikirim ke rekening Anda."},
+    "withdraw_rejected_notif": {"en": "❌ Your withdrawal request #{id} has been rejected.\nReason: {reason}", "id": "❌ Permintaan pencairan #{id} ditolak.\nAlasan: {reason}"},
+    "btn_withdraw":            {"en": "💸 Withdraw", "id": "💸 Tarik Dana"},
+    "btn_commission_history":  {"en": "💰 Commission History", "id": "💰 Riwayat Komisi"},
+
+    # Admin — Commission Settings
+    "admin_commission_title":  {"en": "*⚙️ COMMISSION SETTINGS*", "id": "*⚙️ PENGATURAN KOMISI*"},
+    "admin_commission_rate":   {"en": "📊 Commission Rate", "id": "📊 Rate Komisi"},
+    "admin_min_withdrawal":    {"en": "💸 Min. Withdrawal", "id": "💸 Min. Pencairan"},
+    "admin_set_commission":    {"en": "⚙️ Set Commission %", "id": "⚙️ Atur Komisi %"},
+    "admin_set_min_withdraw":  {"en": "⚙️ Set Min. Withdrawal", "id": "⚙️ Atur Min. Pencairan"},
+    "admin_commission_updated":{"en": "✅ Commission rate updated to {percent}%!", "id": "✅ Rate komisi diperbarui ke {percent}%!"},
+    "admin_min_withdraw_updated":{"en": "✅ Min. withdrawal updated to Rp {amount}!", "id": "✅ Min. pencairan diperbarui ke Rp {amount}!"},
+
+    # Admin — Withdrawal Management
+    "admin_withdrawal_title":  {"en": "*💸 WITHDRAWAL REQUESTS*", "id": "*💸 PERMINTAAN PENCAIRAN*"},
+    "admin_withdrawal_pending":{"en": "*⏳ PENDING WITHDRAWALS*", "id": "*⏳ PENCAIRAN PENDING*"},
+    "admin_no_withdrawals":    {"en": "No pending withdrawal requests.", "id": "Tidak ada permintaan pencairan pending."},
+    "admin_withdraw_detail":   {"en": "💸 *WITHDRAWAL #{id}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n👤 {name} (ID: `{user_id}`)\n🏦 Bank: *{bank}*\n🔢 Account: `{account}`\n📛 Name: *{acc_name}*\n💰 Amount: *Rp {amount}*\n📊 Status: *{status}*\n📅 {date}\n━━━━━━━━━━━━━━━━━━━━━━━━",
+                                 "id": "💸 *PENCAIRAN #{id}*\n━━━━━━━━━━━━━━━━━━━━━━━━\n👤 {name} (ID: `{user_id}`)\n🏦 Bank: *{bank}*\n🔢 Rekening: `{account}`\n📛 Nama: *{acc_name}*\n💰 Jumlah: *Rp {amount}*\n📊 Status: *{status}*\n📅 {date}\n━━━━━━━━━━━━━━━━━━━━━━━━"},
+    "admin_approve_withdraw":  {"en": "✅ Approve", "id": "✅ Setujui"},
+    "admin_reject_withdraw":   {"en": "❌ Reject", "id": "❌ Tolak"},
+    "btn_commission_settings": {"en": "⚙️ Commission Settings", "id": "⚙️ Pengaturan Komisi"},
+    "btn_withdrawal_requests": {"en": "💸 Withdrawal Requests", "id": "💸 Permintaan Pencairan"},
 }

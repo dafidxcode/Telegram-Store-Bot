@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import db
-from handlers.start import t, format_rupiah, escape_md
+from handlers.start import t, format_rupiah, escape_md, get_main_menu_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,7 @@ async def api_dashboard_summary(request: Request):
         "stock": stock,
         "total_users": len(users),
         "total_orders": len(orders),
+        "total_sold": db.get_total_sold(),
         "pending": pending,
         "paid": paid,
         "delivered": delivered,
@@ -355,7 +356,51 @@ async def api_approve_order(order_id: str, request: Request):
                 f"{t('file_attached', user_lang)}"
             )
 
-            await bot.send_document(chat_id=user_id, document=txt_file, caption=caption)
+            await bot.send_document(
+                chat_id=user_id,
+                document=txt_file,
+                caption=caption,
+                reply_markup=get_main_menu_keyboard(user_id, user_lang),
+            )
+
+            qris_msg_id = order.get("qris_message_id")
+            if qris_msg_id:
+                try:
+                    await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+                except Exception:
+                    pass
+
+            try:
+                from notifier import send_channel_purchase_notif
+                await send_channel_purchase_notif(bot, order, product_name)
+            except Exception as e:
+                logger.warning("Failed to send channel purchase notif: %s", e)
+
+        # --- Apply referral commission ---
+        try:
+            buyer_user = db._conn.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,)).fetchone()
+            if buyer_user and buyer_user["referred_by"]:
+                referrer_id = buyer_user["referred_by"]
+                if not db.has_commission_for_order(order_id):
+                    commission_pct = db.get_commission_percent()
+                    order_amount = order.get("total", 0)
+                    commission_amount = int(order_amount * commission_pct / 100)
+                    if commission_amount > 0:
+                        db.add_commission(referrer_id, user_id, order_id, order_amount, commission_pct, commission_amount)
+                        try:
+                            referrer_lang = db.get_user_lang(referrer_id)
+                            await bot.send_message(
+                                chat_id=referrer_id,
+                                text=t("commission_notif", referrer_lang,
+                                    amount=format_rupiah(commission_amount),
+                                    name=order.get("first_name") or order.get("username") or str(user_id),
+                                    order_id=order_id),
+                                parse_mode="Markdown",
+                            )
+                        except Exception:
+                            pass
+        except Exception as exc:
+            logger.exception("Admin approve commission failed for order %s: %s", order_id, exc)
     except Exception as e:
         logger.exception("Failed to deliver accounts in admin approve: %s", e)
 
@@ -517,8 +562,49 @@ async def klikqris_webhook(request: Request):
                             chat_id=user_id,
                             document=txt_file,
                             caption=caption,
+                            reply_markup=get_main_menu_keyboard(user_id, user_lang),
                         )
                         logger.info("Webhook delivered %d accounts for %s", len(stock_items), order_id)
+
+                        qris_msg_id = order.get("qris_message_id")
+                        if qris_msg_id:
+                            try:
+                                await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+                            except Exception:
+                                pass
+
+                        try:
+                            from notifier import send_channel_purchase_notif
+                            await send_channel_purchase_notif(bot, order, product_name)
+                        except Exception as e:
+                            logger.warning("Webhook channel purchase notif failed: %s", e)
+
+                    # --- Apply referral commission ---
+                    try:
+                        buyer_user = db._conn.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,)).fetchone()
+                        if buyer_user and buyer_user["referred_by"]:
+                            referrer_id = buyer_user["referred_by"]
+                            if not db.has_commission_for_order(order_id):
+                                commission_pct = db.get_commission_percent()
+                                order_amount = order.get("total", 0)
+                                commission_amount = int(order_amount * commission_pct / 100)
+                                if commission_amount > 0:
+                                    db.add_commission(referrer_id, user_id, order_id, order_amount, commission_pct, commission_amount)
+                                    try:
+                                        referrer_lang = db.get_user_lang(referrer_id)
+                                        await bot.send_message(
+                                            chat_id=referrer_id,
+                                            text=t("commission_notif", referrer_lang,
+                                                amount=format_rupiah(commission_amount),
+                                                name=order.get("first_name") or order.get("username") or str(user_id),
+                                                order_id=order_id),
+                                            parse_mode="Markdown",
+                                        )
+                                    except Exception:
+                                        pass
+                                    logger.info("Webhook commission Rp %d applied for referrer %s from order %s", commission_amount, referrer_id, order_id)
+                    except Exception as exc:
+                        logger.exception("Webhook commission failed for order %s: %s", order_id, exc)
             except Exception as e:
                 logger.exception("Webhook delivery failed for %s: %s", order_id, e)
 
@@ -533,6 +619,288 @@ async def klikqris_webhook(request: Request):
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "bot": config.SHOP_NAME}
+
+
+# ---------------------------------------------------------------------------
+# User Management APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/users")
+async def api_get_users(request: Request, query: Optional[str] = None, limit: int = 100):
+    await _verify_admin(request)
+    if query:
+        users = db.search_users(query)
+    else:
+        users = db.get_all_users_detail(limit=limit)
+    return {"users": users}
+
+
+@app.get("/api/users/{user_id}")
+async def api_get_user_detail(user_id: int, request: Request):
+    await _verify_admin(request)
+    user = db.get_user_detail(user_id)
+    if not user:
+        return JSONResponse(status_code=404, content={"error": "User tidak ditemukan"})
+    orders = db.get_user_orders(user_id)
+    return {"user": user, "orders": orders}
+
+
+@app.post("/api/users/{user_id}/ban")
+async def api_ban_user(user_id: int, request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    reason = str(body.get("reason", "")).strip()
+    db.ban_user(user_id, reason)
+    return {"success": True}
+
+
+@app.post("/api/users/{user_id}/unban")
+async def api_unban_user(user_id: int, request: Request):
+    await _verify_admin(request)
+    db.unban_user(user_id)
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
+# Voucher Management APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/vouchers")
+async def api_get_vouchers(request: Request):
+    await _verify_admin(request)
+    vouchers = db.get_all_vouchers()
+    return {"vouchers": vouchers}
+
+
+@app.post("/api/vouchers/add")
+async def api_add_voucher(request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    code = str(body.get("code", "")).strip().upper()
+    discount_type = str(body.get("discount_type", "fixed")).strip()
+    discount_value = int(body.get("discount_value", 0))
+    min_purchase = int(body.get("min_purchase", 0))
+    max_uses = int(body.get("max_uses", 0))
+
+    if not code or discount_value <= 0:
+        return JSONResponse(status_code=400, content={"error": "Data voucher tidak valid"})
+
+    existing = db.get_voucher(code)
+    if existing:
+        return JSONResponse(status_code=400, content={"error": "Kode voucher sudah ada"})
+
+    vid = db.create_voucher(code, discount_type, discount_value, min_purchase, max_uses)
+    return {"success": True, "voucher_id": vid}
+
+
+@app.post("/api/vouchers/{vid}/toggle")
+async def api_toggle_voucher(vid: int, request: Request):
+    await _verify_admin(request)
+    db.toggle_voucher(vid)
+    return {"success": True}
+
+
+@app.delete("/api/vouchers/{vid}")
+async def api_delete_voucher(vid: int, request: Request):
+    await _verify_admin(request)
+    db.delete_voucher(vid)
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
+# Feedback APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/feedback")
+async def api_get_feedback(request: Request, status: Optional[str] = None):
+    await _verify_admin(request)
+    feedbacks = db.get_all_feedback(status=status)
+    return {"feedback": feedbacks}
+
+
+@app.post("/api/feedback/{fid}/reply")
+async def api_reply_feedback(fid: int, request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    reply_text = str(body.get("reply", "")).strip()
+    if not reply_text:
+        return JSONResponse(status_code=400, content={"error": "Balasan kosong"})
+
+    fb = db.get_all_feedback()
+    fb_item = next((f for f in fb if f["id"] == fid), None)
+    if not fb_item:
+        return JSONResponse(status_code=404, content={"error": "Feedback tidak ditemukan"})
+
+    db.reply_feedback(fid, reply_text)
+
+    try:
+        from telegram import Bot
+        bot = Bot(token=config.BOT_TOKEN)
+        await bot.send_message(
+            chat_id=fb_item["user_id"],
+            text=f"💬 *Balasan Admin*\n\nFeedback Anda telah ditinjau:\n\n{reply_text}",
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.exception("Failed to send feedback reply: %s", e)
+
+    return {"success": True}
+
+
+@app.post("/api/feedback/{fid}/close")
+async def api_close_feedback(fid: int, request: Request):
+    await _verify_admin(request)
+    db.close_feedback(fid)
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
+# Purchase Detail APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/purchases/{order_id}")
+async def api_get_purchase_detail(order_id: str, request: Request):
+    await _verify_admin(request)
+    detail = db.get_purchase_detail(order_id)
+    order = db.get_order(order_id)
+    return {"detail": detail, "order": order}
+
+
+# ---------------------------------------------------------------------------
+# Channel Settings APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/settings/channel")
+async def api_get_channel_settings(request: Request):
+    await _verify_admin(request)
+    return {
+        "channel_id": config.get_channel_id(),
+        "channel_link": config.get_channel_link(),
+    }
+
+
+@app.post("/api/settings/channel")
+async def api_set_channel_settings(request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    cid = body.get("channel_id")
+    clink = body.get("channel_link")
+
+    if cid is not None:
+        db.set_setting("channel_id", str(cid).strip())
+    if clink is not None:
+        db.set_setting("channel_link", str(clink).strip())
+
+    return {
+        "success": True,
+        "channel_id": config.get_channel_id(),
+        "channel_link": config.get_channel_link(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Commission Settings APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/settings/commission")
+async def api_get_commission_settings(request: Request):
+    await _verify_admin(request)
+    return {
+        "commission_percent": db.get_commission_percent(),
+        "min_withdrawal": db.get_min_withdrawal(),
+    }
+
+
+@app.post("/api/settings/commission")
+async def api_set_commission_settings(request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    pct = body.get("commission_percent")
+    min_wd = body.get("min_withdrawal")
+
+    if pct is not None:
+        pct = int(pct)
+        if 1 <= pct <= 50:
+            db.set_setting("commission_percent", str(pct))
+    if min_wd is not None:
+        min_wd = int(min_wd)
+        if min_wd >= 10000:
+            db.set_setting("min_withdrawal", str(min_wd))
+
+    return {
+        "success": True,
+        "commission_percent": db.get_commission_percent(),
+        "min_withdrawal": db.get_min_withdrawal(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Withdrawal Management APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/withdrawals")
+async def api_get_withdrawals(request: Request, status: Optional[str] = None):
+    await _verify_admin(request)
+    if status == "pending":
+        withdrawals = db.get_pending_withdrawals()
+    else:
+        withdrawals = db.get_all_withdrawals()
+    return {"withdrawals": withdrawals}
+
+
+@app.post("/api/withdrawals/{wd_id}/approve")
+async def api_approve_withdrawal(wd_id: int, request: Request):
+    await _verify_admin(request)
+    wd = db.get_withdrawal_request(wd_id)
+    if not wd:
+        return JSONResponse(status_code=404, content={"error": "Withdrawal tidak ditemukan"})
+    if wd["status"] != "pending":
+        return JSONResponse(status_code=400, content={"error": "Withdrawal sudah diproses"})
+
+    db.process_withdrawal(wd_id, "approved", "Approved via dashboard")
+
+    try:
+        from telegram import Bot
+        bot = Bot(token=config.BOT_TOKEN)
+        user_lang = db.get_user_lang(wd["user_id"])
+        await bot.send_message(
+            chat_id=wd["user_id"],
+            text=t("withdraw_approved_notif", user_lang, id=wd_id, amount=format_rupiah(wd["amount"])),
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.exception("Failed to notify user about approved withdrawal: %s", e)
+
+    return {"success": True}
+
+
+@app.post("/api/withdrawals/{wd_id}/reject")
+async def api_reject_withdrawal(wd_id: int, request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    reason = str(body.get("reason", "Ditolak oleh admin")).strip()
+
+    wd = db.get_withdrawal_request(wd_id)
+    if not wd:
+        return JSONResponse(status_code=404, content={"error": "Withdrawal tidak ditemukan"})
+    if wd["status"] != "pending":
+        return JSONResponse(status_code=400, content={"error": "Withdrawal sudah diproses"})
+
+    db.process_withdrawal(wd_id, "rejected", reason)
+
+    try:
+        from telegram import Bot
+        bot = Bot(token=config.BOT_TOKEN)
+        user_lang = db.get_user_lang(wd["user_id"])
+        await bot.send_message(
+            chat_id=wd["user_id"],
+            text=t("withdraw_rejected_notif", user_lang, id=wd_id, reason=reason),
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.exception("Failed to notify user about rejected withdrawal: %s", e)
+
+    return {"success": True}
 
 
 def run_webhook():

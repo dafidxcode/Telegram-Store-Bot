@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import secrets
 from datetime import datetime, timezone, timedelta
 
@@ -38,17 +39,20 @@ from handlers.start import (
     t,
     format_rupiah,
 )
+from channel_guard import require_channel_join
 
 logger = logging.getLogger(__name__)
 
 JUMLAH = 0
 KONFIRMASI = 1
+VOUCHER_INPUT = 2
 
 
-async def _create_order_and_pay(context, user, product, quantity, query=None, message=None):
+async def _create_order_and_pay(context, user, product, quantity, query=None, message=None, *args, **kwargs):
     """Shared logic: create order, call QRIS API, send QRIS image, or fallback text."""
     lang = get_lang(context, user.id)
     total = product["price"] * quantity
+
     qris_nominal = total
     expires_at = (datetime.now(tz=timezone(timedelta(hours=7))) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
     order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2).upper()}"
@@ -58,6 +62,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             order_id, user.id, user.username, user.first_name,
             quantity, total, product_id=product["id"],
             qris_nominal=qris_nominal, expires_at=expires_at,
+            original_total=total, voucher_code="",
         )
     except Exception as exc:
         logger.exception("Failed to create order: %s", exc)
@@ -123,14 +128,14 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             pass
 
     caption = (
-        f"✅ {t('order_created', lang)}\n"
+        f"{t('order_created', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🆔 ID: {order_id}\n"
-        f"📦 {t('product_label', lang)}: {escape_md(product['name'])}\n"
-        f"🔢 {t('quantity_label', lang)}: {quantity} {t('accounts_label', lang)}\n"
+        f"{t('product_label', lang)}: {escape_md(product['name'])}\n"
+        f"{t('quantity_label', lang)}: {quantity} {t('accounts_label', lang)}\n"
         f"💰 Total: Rp {format_rupiah(qris_nominal)}\n"
-        f"⏳ {t('status_label', lang)}: {api_status}\n"
-        f"⏰ {t('expires_label', lang)}: {api_expired_at}\n"
+        f"{t('status_label', lang)}: {api_status}\n"
+        f"{t('expires_label', lang)}: {api_expired_at}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{t('scan_qris', lang)}\n"
         f"{t('auto_deliver', lang)}\n"
@@ -205,10 +210,10 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🆔 ID: `{order_id}`\n"
             f"{t('product_label', lang)}: *{escape_md(product['name'])}*\n"
-            f"🔢 {t('quantity_label', lang)}: *{quantity}* {t('accounts_label', lang)}\n"
+            f"{t('quantity_label', lang)}: *{quantity}* {t('accounts_label', lang)}\n"
             f"💰 Total: *Rp {format_rupiah(qris_nominal)}*\n"
             f"{t('status_label', lang)}: *{api_status}*\n"
-            f"⏰ {t('expires_label', lang)}: *{api_expired_at}*\n"
+            f"{t('expires_label', lang)}: *{api_expired_at}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{t('qr_processing', lang)}"
         )
@@ -227,9 +232,12 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     context.user_data.pop("qty", None)
     context.user_data.pop("state", None)
     context.user_data.pop("admin_state", None)
+    context.user_data.pop("voucher_code", None)
+    context.user_data.pop("voucher_discount", None)
     return order_id, sent_msg
 
 
+@require_channel_join
 async def handle_order_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Cancel order, delete QRIS message, show home menu silently."""
     query = update.callback_query
@@ -314,6 +322,8 @@ async def handle_cancel_btn(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data.pop("qty", None)
     context.user_data.pop("state", None)
     context.user_data.pop("admin_state", None)
+    context.user_data.pop("voucher_code", None)
+    context.user_data.pop("voucher_discount", None)
     if query:
         try:
             await query.edit_message_text(
@@ -339,6 +349,7 @@ async def handle_cancel_btn(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return ConversationHandler.END
 
 
+@require_channel_join
 async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message = update.message
     if message is None:
@@ -371,6 +382,7 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return JUMLAH
 
 
+@require_channel_join
 async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     if query is None:
@@ -503,7 +515,10 @@ async def handle_cart_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             return ConversationHandler.END
 
-        await query.edit_message_text(t("creating_order", lang), parse_mode=ParseMode.MARKDOWN)
+        await query.edit_message_text(
+            t("creating_order_for", lang, name=escape_md(product['name']), qty=qty),
+            parse_mode=ParseMode.MARKDOWN,
+        )
         order_id, sent_msg = await _create_order_and_pay(context, user, product, qty, query=query)
         return ConversationHandler.END
 
@@ -645,6 +660,7 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
     return ConversationHandler.END
 
 
+@require_channel_join
 async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         user_id = update.effective_user.id
@@ -676,7 +692,8 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             if created:
                 try:
                     dt_obj = datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
-                    created_wib = dt_obj.strftime("%d %B %Y at %-H:%M WIB")
+                    fmt = "%d %B %Y at %#H:%M WIB" if os.name == "nt" else "%d %B %Y at %-H:%M WIB"
+                    created_wib = dt_obj.strftime(fmt)
                 except Exception:
                     created_wib = created
             else:
@@ -685,7 +702,7 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             lines.append(
                 f"📋 {oid}\n"
                 f"{t('product_label', lang)}: {product_name}\n"
-                f"🔢 {t('quantity_label', lang)}: {qty} {t('accounts_label', lang)}\n"
+                f"{t('quantity_label', lang)}: {qty} {t('accounts_label', lang)}\n"
                 f"💰 Total: Rp {format_rupiah(total)}\n"
                 f"{t('status_label_header', lang)}: {emoji} {status}\n"
                 f"📅 {t('date_label', lang)}: {created_wib}\n"
