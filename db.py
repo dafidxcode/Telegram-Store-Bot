@@ -417,6 +417,105 @@ def release_stock(order_id: str) -> int:
     return cur.rowcount
 
 
+def get_stock_items(
+    product_id: int | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    page: int = 1,
+    limit: int = 50,
+) -> tuple[list[dict], int]:
+    """Retrieve stock items joined with product names with optional filters, search, and pagination."""
+    assert _conn is not None
+    where_clauses = []
+    params: list = []
+
+    if product_id is not None and product_id > 0:
+        where_clauses.append("s.product_id = ?")
+        params.append(product_id)
+
+    if status and status in ("ready", "sold"):
+        where_clauses.append("s.status = ?")
+        params.append(status)
+
+    if search:
+        search_pat = f"%{search.strip()}%"
+        where_clauses.append("(s.email LIKE ? OR s.password LIKE ? OR s.balance LIKE ? OR s.order_id LIKE ?)")
+        params.extend([search_pat, search_pat, search_pat, search_pat])
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    count_sql = f"SELECT COUNT(*) as cnt FROM stock s {where_sql}"
+    total_row = _conn.execute(count_sql, params).fetchone()
+    total = total_row["cnt"] if total_row else 0
+
+    offset = max(0, (page - 1) * limit)
+    query_sql = f"""
+        SELECT s.*, p.name as product_name
+        FROM stock s
+        LEFT JOIN products p ON s.product_id = p.id
+        {where_sql}
+        ORDER BY s.id DESC
+        LIMIT ? OFFSET ?
+    """
+    rows = _conn.execute(query_sql, params + [limit, offset]).fetchall()
+    items = [_row_to_dict(r) for r in rows]
+    return items, total
+
+
+def delete_stock_item(stock_id: int) -> bool:
+    """Delete a single stock entry by ID."""
+    assert _conn is not None
+    cur = _conn.execute("DELETE FROM stock WHERE id = ?", (stock_id,))
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def delete_stock_items_bulk(stock_ids: list[int]) -> int:
+    """Delete multiple stock entries by IDs."""
+    assert _conn is not None
+    if not stock_ids:
+        return 0
+    placeholders = ",".join("?" for _ in stock_ids)
+    cur = _conn.execute(f"DELETE FROM stock WHERE id IN ({placeholders})", stock_ids)
+    _conn.commit()
+    return cur.rowcount
+
+
+def update_stock_item_status(stock_id: int, status: str) -> bool:
+    """Set status of a stock entry to 'ready' or 'sold'."""
+    assert _conn is not None
+    if status not in ("ready", "sold"):
+        return False
+    if status == "sold":
+        cur = _conn.execute(
+            "UPDATE stock SET status = 'sold', sold_at = datetime('now') WHERE id = ?",
+            (stock_id,),
+        )
+    else:
+        cur = _conn.execute(
+            "UPDATE stock SET status = 'ready', sold_at = NULL, order_id = NULL WHERE id = ?",
+            (stock_id,),
+        )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def update_stock_items_status_bulk(stock_ids: list[int], status: str) -> int:
+    """Set status of multiple stock entries."""
+    assert _conn is not None
+    if not stock_ids or status not in ("ready", "sold"):
+        return 0
+    placeholders = ",".join("?" for _ in stock_ids)
+    if status == "sold":
+        sql = f"UPDATE stock SET status = 'sold', sold_at = datetime('now') WHERE id IN ({placeholders})"
+    else:
+        sql = f"UPDATE stock SET status = 'ready', sold_at = NULL, order_id = NULL WHERE id IN ({placeholders})"
+    cur = _conn.execute(sql, stock_ids)
+    _conn.commit()
+    return cur.rowcount
+
+
+
 # ---------------------------------------------------------------------------
 # Orders
 # ---------------------------------------------------------------------------

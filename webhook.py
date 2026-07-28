@@ -282,6 +282,72 @@ async def api_export_stock(pid: int, request: Request):
     )
 
 
+@app.get("/api/stock/items")
+async def api_get_stock_items(
+    request: Request,
+    product_id: Optional[int] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+):
+    await _verify_admin(request)
+    items, total = db.get_stock_items(
+        product_id=product_id,
+        status=status,
+        search=search,
+        page=page,
+        limit=limit,
+    )
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@app.delete("/api/stock/items/{stock_id}")
+async def api_delete_stock_item(stock_id: int, request: Request):
+    await _verify_admin(request)
+    deleted = db.delete_stock_item(stock_id)
+    if not deleted:
+        return JSONResponse(status_code=404, content={"error": "Stok tidak ditemukan"})
+    return {"success": True}
+
+
+@app.post("/api/stock/items/delete-bulk")
+async def api_delete_stock_items_bulk(request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    stock_ids = body.get("ids", [])
+    if not isinstance(stock_ids, list):
+        return JSONResponse(status_code=400, content={"error": "Parameter ids harus berupa array"})
+    count = db.delete_stock_items_bulk([int(i) for i in stock_ids if str(i).isdigit()])
+    return {"success": True, "deleted_count": count}
+
+
+@app.post("/api/stock/items/{stock_id}/status")
+async def api_update_stock_item_status(stock_id: int, request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    new_status = str(body.get("status", "")).strip().lower()
+    if new_status not in ("ready", "sold"):
+        return JSONResponse(status_code=400, content={"error": "Status harus 'ready' atau 'sold'"})
+    updated = db.update_stock_item_status(stock_id, new_status)
+    if not updated:
+        return JSONResponse(status_code=404, content={"error": "Stok tidak ditemukan"})
+    return {"success": True, "status": new_status}
+
+
+@app.post("/api/stock/items/status-bulk")
+async def api_update_stock_items_status_bulk(request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    stock_ids = body.get("ids", [])
+    new_status = str(body.get("status", "")).strip().lower()
+    if not isinstance(stock_ids, list) or new_status not in ("ready", "sold"):
+        return JSONResponse(status_code=400, content={"error": "Parameter tidak valid"})
+    count = db.update_stock_items_status_bulk([int(i) for i in stock_ids if str(i).isdigit()], new_status)
+    return {"success": True, "updated_count": count, "status": new_status}
+
+
+
 # ---------------------------------------------------------------------------
 # Orders & Financial Reports APIs
 # ---------------------------------------------------------------------------

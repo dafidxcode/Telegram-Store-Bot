@@ -852,7 +852,69 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- DAFTAR & KELOLA STOK AKUN -->
+                <div class="section-card" style="margin-top: 24px;">
+                    <div class="section-header" style="flex-wrap: wrap; gap: 12px; justify-content: space-between;">
+                        <span class="section-title"><i class="fa-solid fa-list-check" style="color: var(--primary);"></i> Daftar & Kelola Stok Akun</span>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <input type="text" id="stock-search-input" class="form-control" style="width: 220px;" placeholder="Cari Email / Pass / Order..." onkeyup="if(event.key==='Enter') loadStockItems(1)">
+                            <select id="stock-filter-product" class="form-control" style="width: 180px;" onchange="loadStockItems(1)">
+                                <option value="">-- Semua Produk --</option>
+                            </select>
+                            <select id="stock-filter-status" class="form-control" style="width: 140px;" onchange="loadStockItems(1)">
+                                <option value="">Semua Status</option>
+                                <option value="ready">Ready</option>
+                                <option value="sold">Terjual</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline" onclick="loadStockItems(currentStockPage)"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                        </div>
+                    </div>
+
+                    <!-- BULK ACTIONS BAR -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(31, 41, 55, 0.5); padding: 10px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 13px; color: var(--text-muted);" id="stock-selected-count">0 akun dipilih</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-sm btn-outline" onclick="copySelectedStock()"><i class="fa-solid fa-copy"></i> Copy Terpilih</button>
+                            <button class="btn btn-sm btn-warning" onclick="bulkUpdateStockStatus('sold')"><i class="fa-solid fa-check"></i> Tandai Terjual</button>
+                            <button class="btn btn-sm btn-outline" style="color: var(--success); border-color: var(--success);" onclick="bulkUpdateStockStatus('ready')"><i class="fa-solid fa-box-open"></i> Tandai Ready</button>
+                            <button class="btn btn-sm btn-danger" onclick="bulkDeleteStock()"><i class="fa-solid fa-trash"></i> Hapus Terpilih</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px; text-align: center;">
+                                        <input type="checkbox" id="stock-select-all" onchange="toggleSelectAllStock(this.checked)">
+                                    </th>
+                                    <th>ID</th>
+                                    <th>PRODUK</th>
+                                    <th>DATA AKUN (EMAIL:PASS:BAL)</th>
+                                    <th>STATUS</th>
+                                    <th>ORDER ID / WAKTU</th>
+                                    <th style="text-align: right;">AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stock-table-body">
+                                <tr>
+                                    <td colspan="7" style="text-align:center;">Memuat data stok akun...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- PAGINATION -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 10px;">
+                        <div style="font-size: 13px; color: var(--text-muted);" id="stock-pagination-info">Menampilkan 0 dari 0 akun</div>
+                        <div style="display: flex; gap: 6px;" id="stock-pagination-btns"></div>
+                    </div>
+                </div>
             </div>
+
 
             <!-- TAB 4: ORDERS MANAGEMENT -->
             <div id="tab-orders" class="tab-content">
@@ -1434,17 +1496,23 @@
         }
 
         // LOAD STOCK TAB
+        let currentStockPage = 1;
+        let stockItemsData = [];
+
         async function loadStockTab() {
             const res = await fetch('/api/products');
             const data = await res.json();
             const select = document.getElementById('stock-product-select');
+            const filterProduct = document.getElementById('stock-filter-product');
             const exportContainer = document.getElementById('export-stock-list');
 
             select.innerHTML = '';
+            if (filterProduct) filterProduct.innerHTML = '<option value="">-- Semua Produk --</option>';
             exportContainer.innerHTML = '';
 
             (data.products || []).forEach(p => {
                 select.innerHTML += `<option value="${p.id}">${p.name} (Ready: ${p.stock_count})</option>`;
+                if (filterProduct) filterProduct.innerHTML += `<option value="${p.id}">${p.name}</option>`;
 
                 const div = document.createElement('div');
                 div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#0b0f19; padding:12px; border-radius:8px; border:1px solid var(--border-color);';
@@ -1457,7 +1525,246 @@
                 `;
                 exportContainer.appendChild(div);
             });
+
+            await loadStockItems(1);
         }
+
+        async function loadStockItems(page = 1) {
+            currentStockPage = page;
+            const filterProductEl = document.getElementById('stock-filter-product');
+            const filterStatusEl = document.getElementById('stock-filter-status');
+            const searchInputEl = document.getElementById('stock-search-input');
+
+            const productId = filterProductEl ? filterProductEl.value : '';
+            const status = filterStatusEl ? filterStatusEl.value : '';
+            const search = searchInputEl ? searchInputEl.value.trim() : '';
+
+            let url = `/api/stock/items?page=${page}&limit=50`;
+            if (productId) url += `&product_id=${productId}`;
+            if (status) url += `&status=${status}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+
+            const tbody = document.getElementById('stock-table-body');
+            if (!tbody) return;
+
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Memuat data stok...</td></tr>';
+            const selectAll = document.getElementById('stock-select-all');
+            if (selectAll) selectAll.checked = false;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                stockItemsData = data.items || [];
+
+                tbody.innerHTML = '';
+                if (stockItemsData.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Tidak ada stok akun ditemukan.</td></tr>';
+                } else {
+                    stockItemsData.forEach(item => {
+                        const tr = document.createElement('tr');
+                        const isSold = item.status === 'sold';
+                        const badgeClass = isSold ? 'badge-danger' : 'badge-success';
+
+                        let rawAccount = item.email || '';
+                        if (item.password) rawAccount += `:${item.password}`;
+                        if (item.balance) rawAccount += `:${item.balance}`;
+
+                        const orderInfo = isSold 
+                            ? `<span style="color:var(--warning); font-size:12px;">Order #${item.order_id || 'N/A'}</span><br><small style="color:var(--text-muted); font-size:11px;">${item.sold_at || ''}</small>`
+                            : `<span style="color:var(--text-muted); font-size:12px;">Ready</span><br><small style="color:var(--text-muted); font-size:11px;">${item.added_at || ''}</small>`;
+
+                        tr.innerHTML = `
+                            <td style="text-align:center;">
+                                <input type="checkbox" class="stock-item-checkbox" value="${item.id}" data-account="${escapeHtml(rawAccount)}" onchange="updateStockSelectionCount()">
+                            </td>
+                            <td><code>#${item.id}</code></td>
+                            <td><b>${escapeHtml(item.product_name || 'Produk #' + item.product_id)}</b></td>
+                            <td>
+                                <div style="font-family:monospace; background:rgba(0,0,0,0.3); padding:4px 8px; border-radius:4px; font-size:13px; word-break:break-all; max-width:320px; display:inline-block;">
+                                    ${escapeHtml(rawAccount)}
+                                </div>
+                            </td>
+                            <td><span class="badge ${badgeClass}">${item.status.toUpperCase()}</span></td>
+                            <td>${orderInfo}</td>
+                            <td style="text-align:right;">
+                                <div style="display:flex; gap:6px; justify-content:flex-end;">
+                                    <button class="btn btn-sm btn-outline" onclick="copyTextToClipboard('${escapeJsString(rawAccount)}')" title="Copy Data Akun">📋 Copy</button>
+                                    <button class="btn btn-sm ${isSold ? 'btn-outline' : 'btn-warning'}" onclick="toggleStockStatus(${item.id}, '${item.status}')" title="${isSold ? 'Set Status Ready' : 'Set Status Terjual'}">
+                                        ${isSold ? '🔄 Set Ready' : '🏷️ Terjual'}
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteSingleStock(${item.id})" title="Hapus Stok"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                renderStockPagination(data.total || 0, page, 50);
+                updateStockSelectionCount();
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--danger);">Gagal memuat stok.</td></tr>';
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function escapeJsString(text) {
+            if (!text) return '';
+            return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        function copyTextToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Data akun berhasil dicopy ke clipboard!', 'success');
+            }).catch(() => {
+                showToast('Gagal menyalin data', 'error');
+            });
+        }
+
+        function toggleSelectAllStock(checked) {
+            document.querySelectorAll('.stock-item-checkbox').forEach(cb => {
+                cb.checked = checked;
+            });
+            updateStockSelectionCount();
+        }
+
+        function updateStockSelectionCount() {
+            const checked = document.querySelectorAll('.stock-item-checkbox:checked');
+            const countSpan = document.getElementById('stock-selected-count');
+            if (countSpan) {
+                countSpan.innerText = `${checked.length} akun dipilih`;
+            }
+        }
+
+        function copySelectedStock() {
+            const checkboxes = document.querySelectorAll('.stock-item-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast('Pilih setidaknya satu akun untuk dicopy!', 'warning');
+                return;
+            }
+            const accounts = Array.from(checkboxes).map(cb => cb.getAttribute('data-account')).filter(Boolean);
+            const textToCopy = accounts.join('\n');
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showToast(`Berhasil copy ${accounts.length} data akun ke clipboard!`, 'success');
+            }).catch(() => {
+                showToast('Gagal menyalin data ke clipboard', 'error');
+            });
+        }
+
+        async function deleteSingleStock(id) {
+            if (!confirm(`Hapus akun stok #${id}?`)) return;
+            const res = await fetch(`/api/stock/items/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast(`Stok #${id} berhasil dihapus`, 'success');
+                loadStockItems(currentStockPage);
+            } else {
+                showToast('Gagal menghapus stok', 'error');
+            }
+        }
+
+        async function bulkDeleteStock() {
+            const checkboxes = document.querySelectorAll('.stock-item-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast('Pilih setidaknya satu akun untuk dihapus!', 'warning');
+                return;
+            }
+            const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            if (!confirm(`Apakah Anda yakin ingin menghapus ${ids.length} stok akun terpilih?`)) return;
+
+            const res = await fetch('/api/stock/items/delete-bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`Berhasil menghapus ${data.deleted_count} stok akun!`, 'success');
+                loadStockItems(currentStockPage);
+            } else {
+                showToast('Gagal menghapus stok terpilih', 'error');
+            }
+        }
+
+        async function toggleStockStatus(id, currentStatus) {
+            const newStatus = currentStatus === 'sold' ? 'ready' : 'sold';
+            const res = await fetch(`/api/stock/items/${id}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (res.ok) {
+                showToast(`Status stok #${id} diubah ke ${newStatus.toUpperCase()}`, 'success');
+                loadStockItems(currentStockPage);
+            } else {
+                showToast('Gagal memperbarui status stok', 'error');
+            }
+        }
+
+        async function bulkUpdateStockStatus(newStatus) {
+            const checkboxes = document.querySelectorAll('.stock-item-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast('Pilih setidaknya satu akun!', 'warning');
+                return;
+            }
+            const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            const label = newStatus === 'sold' ? 'TERJUAL' : 'READY';
+
+            const res = await fetch('/api/stock/items/status-bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, status: newStatus })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`Berhasil mengubah ${data.updated_count} stok akun menjadi ${label}!`, 'success');
+                loadStockItems(currentStockPage);
+            } else {
+                showToast('Gagal memperbarui status stok', 'error');
+            }
+        }
+
+        function renderStockPagination(total, currentPage, limit) {
+            const info = document.getElementById('stock-pagination-info');
+            const container = document.getElementById('stock-pagination-btns');
+            if (!info || !container) return;
+
+            const totalPages = Math.ceil(total / limit) || 1;
+            const startItem = total === 0 ? 0 : (currentPage - 1) * limit + 1;
+            const endItem = Math.min(total, currentPage * limit);
+
+            info.innerText = `Menampilkan ${startItem}-${endItem} dari ${total} akun`;
+
+            container.innerHTML = '';
+            
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'btn btn-sm btn-outline';
+            prevBtn.disabled = currentPage <= 1;
+            prevBtn.innerHTML = '‹ Prev';
+            prevBtn.onclick = () => loadStockItems(currentPage - 1);
+            container.appendChild(prevBtn);
+
+            const pageSpan = document.createElement('span');
+            pageSpan.style.cssText = 'padding: 4px 10px; font-size: 13px; align-self: center; font-weight: 600; color: var(--primary);';
+            pageSpan.innerText = `Hal ${currentPage} / ${totalPages}`;
+            container.appendChild(pageSpan);
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn btn-sm btn-outline';
+            nextBtn.disabled = currentPage >= totalPages;
+            nextBtn.innerHTML = 'Next ›';
+            nextBtn.onclick = () => loadStockItems(currentPage + 1);
+            container.appendChild(nextBtn);
+        }
+
 
         document.getElementById('add-stock-form').addEventListener('submit', async (e) => {
             e.preventDefault();
