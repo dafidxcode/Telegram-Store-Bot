@@ -257,6 +257,11 @@ def init_db(path: str) -> None:
     _conn.executescript(_SCHEMA_SQL)
     _migrate(_conn)
     _conn.commit()
+    try:
+        renumber_products()
+    except Exception:
+        pass
+
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +315,50 @@ def delete_product(product_id: int) -> bool:
     assert _conn is not None
     cur = _conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
     _conn.commit()
+    if cur.rowcount > 0:
+        renumber_products()
     return cur.rowcount > 0
+
+
+def renumber_products() -> bool:
+    """Renumber all existing products sequentially (1, 2, 3...) and update foreign keys in stock, orders, vouchers."""
+    assert _conn is not None
+    try:
+        rows = _conn.execute("SELECT id FROM products ORDER BY id ASC").fetchall()
+        if not rows:
+            _conn.execute("DELETE FROM sqlite_sequence WHERE name = 'products'")
+            _conn.commit()
+            return True
+
+        old_ids = [r["id"] for r in rows]
+
+        # Step 1: Map old_id to temporary negative ID (-idx) to prevent unique constraint conflicts
+        for idx, old_id in enumerate(old_ids, 1):
+            temp_id = -idx
+            if old_id != idx:
+                _conn.execute("UPDATE stock SET product_id = ? WHERE product_id = ?", (temp_id, old_id))
+                _conn.execute("UPDATE orders SET product_id = ? WHERE product_id = ?", (temp_id, old_id))
+                _conn.execute("UPDATE vouchers SET product_id = ? WHERE product_id = ?", (temp_id, old_id))
+                _conn.execute("UPDATE products SET id = ? WHERE id = ?", (temp_id, old_id))
+
+        # Step 2: Map temporary negative ID (-idx) to target positive ID (idx)
+        for idx in range(1, len(old_ids) + 1):
+            temp_id = -idx
+            new_id = idx
+            _conn.execute("UPDATE stock SET product_id = ? WHERE product_id = ?", (new_id, temp_id))
+            _conn.execute("UPDATE orders SET product_id = ? WHERE product_id = ?", (new_id, temp_id))
+            _conn.execute("UPDATE vouchers SET product_id = ? WHERE product_id = ?", (new_id, temp_id))
+            _conn.execute("UPDATE products SET id = ? WHERE id = ?", (new_id, temp_id))
+
+        # Step 3: Reset autoincrement sequence
+        _conn.execute("UPDATE sqlite_sequence SET seq = ? WHERE name = 'products'", (len(old_ids),))
+        _conn.commit()
+        return True
+    except Exception as e:
+        logger_d = __import__("logging").getLogger(__name__)
+        logger_d.exception("Error renumbering products: %s", e)
+        return False
+
 
 
 # ---------------------------------------------------------------------------

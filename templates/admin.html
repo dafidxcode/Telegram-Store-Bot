@@ -793,8 +793,12 @@
                 <div class="section-card">
                     <div class="section-header">
                         <span class="section-title"><i class="fa-solid fa-boxes-stacked"></i> Manajemen Produk</span>
-                        <button class="btn btn-sm" onclick="openAddProductModal()"><i class="fa-solid fa-plus"></i> Tambah Produk Baru</button>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-sm btn-outline" onclick="fixProductIds()"><i class="fa-solid fa-wand-magic-sparkles"></i> Fix / Rapikan ID</button>
+                            <button class="btn btn-sm" onclick="openAddProductModal()"><i class="fa-solid fa-plus"></i> Tambah Produk Baru</button>
+                        </div>
                     </div>
+
                     <div class="table-responsive">
                         <table>
                             <thead>
@@ -1430,6 +1434,18 @@
                 tbody.appendChild(tr);
             });
         }
+
+        async function fixProductIds() {
+            const res = await fetch('/api/products/fix-ids', { method: 'POST' });
+            if (res.ok) {
+                showToast('Nomor ID produk berhasil dirapikan (1, 2, 3...)!', 'success');
+                loadProducts();
+                if (typeof loadStockTab === 'function') loadStockTab();
+            } else {
+                showToast('Gagal merapikan ID produk', 'error');
+            }
+        }
+
 
         // PRODUCT MODALS
         function openAddProductModal() {

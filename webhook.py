@@ -224,7 +224,16 @@ async def api_delete_product(pid: int, request: Request):
     if not product:
         return JSONResponse(status_code=404, content={"error": "Produk tidak ditemukan"})
     db.delete_product(pid)
+    db.renumber_products()
     return {"success": True}
+
+
+@app.post("/api/products/fix-ids")
+async def api_fix_product_ids(request: Request):
+    await _verify_admin(request)
+    db.renumber_products()
+    return {"success": True}
+
 
 
 # ---------------------------------------------------------------------------
