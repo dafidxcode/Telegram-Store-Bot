@@ -128,6 +128,62 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
 
     admin_state = context.user_data.get("admin_state")
 
+    if admin_state and admin_state.startswith("preorder_fulfill:"):
+        message = update.message
+        if message is None or not message.text:
+            return
+        delivered_content = message.text.strip()
+        order_id = admin_state.split(":")[1]
+        context.user_data.pop("admin_state", None)
+
+        order = db.get_order(order_id)
+        if not order:
+            await message.reply_text("❌ Pesanan tidak ditemukan.", reply_markup=_admin_back_keyboard(lang))
+            return
+
+        product = db.get_product(order.get("product_id", 1))
+        product_name = product["name"] if product else "N/A"
+        u_id = order["user_id"]
+        user_lang = db.get_user_lang(u_id)
+
+        db.save_purchase_detail(
+            order_id=order_id,
+            user_id=u_id,
+            product_name=product_name,
+            accounts_delivered=delivered_content,
+        )
+        db.update_order_status(order_id, "delivered")
+
+        buyer_text = (
+            f"🎉 *PESANAN PRE-ORDER SELESAI!*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 Pesanan: `#{order_id}`\n"
+            f"📦 Produk: *{escape_md(product_name)}*\n"
+            f"🔢 Jumlah: {order['quantity']} akun\n"
+            f"💰 Total: *Rp {format_rupiah(order['total'])}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔐 *Data Produk / Akun Anda:*\n"
+            f"```\n{delivered_content}\n```\n\n"
+            f"Terima kasih telah berbelanja! 🙏"
+        )
+        try:
+            from handlers.start import get_main_menu_keyboard
+            await context.bot.send_message(
+                chat_id=u_id,
+                text=buyer_text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu_keyboard(u_id, user_lang),
+            )
+        except Exception as e:
+            logger.warning("Failed to send delivered preorder to user %s: %s", u_id, e)
+
+        await message.reply_text(
+            f"✅ *Produk Pre-Order #{order_id} berhasil dikirimkan ke pengguna!*",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang),
+        )
+        return
+
     if admin_state == "addproduct_name":
         message = update.message
         if message is None or not message.text:
@@ -348,7 +404,7 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         for u in users[:10]:
             name = f"@{u['username']}" if u.get("username") else u.get("first_name", str(u["user_id"]))
             ban_icon = "🚫" if u.get("is_banned") else ""
-            lines.append(f"• {ban_icon} {name} | {u.get('total_orders', 0)} orders | Rp {format_rupiah(u.get('total_spent', 0))}")
+            lines.append(f"{ban_icon} {name} | {u.get('total_orders', 0)} orders | Rp {format_rupiah(u.get('total_spent', 0))}")
             buttons.append([InlineKeyboardButton(
                 f"👤 {name}",
                 callback_data=f"admin:userdetail:{u['user_id']}",

@@ -125,8 +125,7 @@ def build_home_text(user, lang: str = "en") -> str:
 
     product_lines = []
     for i, p in enumerate(active_products, 1):
-        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-        product_lines.append(f"{get_num_emoji(i)} {escape_md(p['name'])}: {stock} stock | Rp {format_rupiah(p['price'])}")
+        product_lines.append(f"{get_num_emoji(i)} {escape_md(p['name'])}")
 
     product_stock_text = "\n".join(product_lines) if product_lines else f"{t('no_products', lang)}"
 
@@ -165,21 +164,26 @@ def build_products_text(lang: str = "en") -> str:
     if not products:
         return t("no_products_yet", lang)
 
-    lines = [f"{t('product_list_title', lang)}\n"]
+    lines = [f"{t('product_list_title', lang)}\n━━━━━━━━━━━━━━━━━━━━━━━━\n"]
     for i, p in enumerate(products, 1):
-        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
-        duration = f"\n{t('duration', lang)}: {escape_md(p['duration'])}" if p.get("duration") else ""
-        desc = f"\n{escape_md(p['description'])}" if p.get("description") else ""
+        if p["stock_type"] == "preorder":
+            stock_text = f"*{t('preorder_stock_text', lang)}*"
+        else:
+            cnt = db.get_stock_count(p["id"])
+            stock_text = "❌ *HABIS*" if cnt == 0 else f"*{cnt}* {t('accounts', lang)}"
 
-        acct_label = t("accounts", lang) if p['stock_type'] == 'limited' else ""
+        duration = f"\n{t('duration', lang)}: {escape_md(p['duration'])}" if p.get("duration") else ""
+        desc = f"\n📝 {escape_md(p['description'])}" if p.get("description") else ""
+
         lines.append(
             f"*{i}. {escape_md(p['name'])}*\n"
             f"{desc}{duration}\n"
             f"{t('price', lang)}: *Rp {format_rupiah(p['price'])}*\n"
-            f"{t('stock', lang)}: *{stock}* {acct_label}\n"
+            f"{t('stock', lang)}: {stock_text}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━"
         )
 
-    lines.append(t("select_product", lang))
+    lines.append(f"\n{t('select_product', lang)}")
     return "\n".join(lines)
 
 
@@ -247,6 +251,7 @@ def get_admin_orders_keyboard(lang="id"):
         ],
         [
             InlineKeyboardButton(t("btn_search_order", lang), callback_data="admin:search"),
+            InlineKeyboardButton(t("btn_pending_preorders", lang), callback_data="admin:preorders"),
         ],
         [InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")],
     ])
@@ -496,10 +501,12 @@ async def cmd_produk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     products = db.get_active_products()
     buttons = []
     for p in products:
+        if p["stock_type"] == "limited" and db.get_stock_count(p["id"]) <= 0:
+            continue
         p_name = escape_md(p['name'])
         btn_title = p_name if p_name.startswith(("🛒", "🛍️", "📦")) else f"🛒 {p_name}"
         buttons.append([InlineKeyboardButton(
-            f"{btn_title} - Rp {format_rupiah(p['price'])}",
+            btn_title,
             callback_data=f"buy:{p['id']}",
         )])
     buttons.append([btn_home(lang)])
@@ -552,8 +559,12 @@ async def cmd_stock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = f"{t('stock_info', lang)}\n\n"
     if products:
         for p in products:
-            stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-            text += f"• *{escape_md(p['name'])}*: {stock} {t('accounts', lang)} | Rp {format_rupiah(p['price'])}/ea\n"
+            if p["stock_type"] == "preorder":
+                stock_str = t("preorder_label", lang)
+            else:
+                cnt = db.get_stock_count(p["id"])
+                stock_str = "❌ HABIS" if cnt == 0 else f"{cnt} {t('accounts', lang)}"
+            text += f"*{escape_md(p['name'])}*: {stock_str}\n"
         text += f"\n{t('total_stock', lang)}: *{total_stock}*"
     else:
         text += t("no_products", lang)
@@ -666,7 +677,7 @@ async def handle_referral_claim(update: Update, context: ContextTypes.DEFAULT_TY
         lines.append(f"\n📋 *Referral List:*")
         for r in ref_list[:10]:
             name = r.get("username") or r.get("first_name") or str(r["referred_id"])
-            lines.append(f"  • @{name}" if r.get("username") else f"  • {name}")
+            lines.append(f"  @{name}" if r.get("username") else f"  {name}")
 
     text = "\n".join(lines)
     buttons = [
@@ -763,10 +774,12 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         products = db.get_active_products()
         buttons = []
         for p in products:
+            if p["stock_type"] == "limited" and db.get_stock_count(p["id"]) <= 0:
+                continue
             p_name = escape_md(p['name'])
             btn_title = p_name if p_name.startswith(("🛒", "🛍️", "📦")) else f"🛒 {p_name}"
             buttons.append([InlineKeyboardButton(
-                f"{btn_title} - Rp {format_rupiah(p['price'])}",
+                btn_title,
                 callback_data=f"buy:{p['id']}",
             )])
         buttons.append([btn_home(lang)])
@@ -779,8 +792,14 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         text = f"{t('stock_info', lang)}\n\n"
         if products:
             for p in products:
-                stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
-                text += f"• *{escape_md(p['name'])}*: {stock} {t('accounts', lang)} | Rp {format_rupiah(p['price'])}/ea\n"
+                if p["stock_type"] == "limited":
+                    cnt = db.get_stock_count(p["id"])
+                    stock_str = "❌ HABIS" if cnt == 0 else f"{cnt} {t('accounts', lang)}"
+                elif p["stock_type"] == "preorder":
+                    stock_str = t("preorder_label", lang)
+                else:
+                    stock_str = t("unlimited", lang)
+                text += f"*{escape_md(p['name'])}*: {stock_str}\n"
             text += f"\n{t('total_stock', lang)}: *{total_stock}*"
         else:
             text += t("no_products", lang)
@@ -1082,7 +1101,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         lines = [f"{t('admin_product_list', lang)}\n"]
         for i, p in enumerate(products, 1):
-            stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
+            stock = t("preorder_label", lang) if p["stock_type"] == "preorder" else f"{db.get_stock_count(p['id'])} accounts"
             status = "✅" if p["is_active"] else "❌"
             lines.append(
                 f"{status} {get_num_emoji(i)} | *{escape_md(p['name'])}*\n"
@@ -1240,6 +1259,59 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             "\n".join(lines),
             reply_markup=InlineKeyboardMarkup(keyboard_rows),
         )
+
+    elif action == "preorders":
+        pending_preorders = db.get_pending_preorders()
+        if not pending_preorders:
+            await _safe_edit_or_send(
+                query,
+                "❌ *Tidak ada pesanan Pre-Order yang pending saat ini.*",
+                reply_markup=get_admin_back_keyboard(lang),
+            )
+            return
+
+        lines = [f"⏳ *PESANAN PRE-ORDER PENDING ({len(pending_preorders)})*\n━━━━━━━━━━━━━━━━━━━━━━━━\n"]
+        buttons = []
+        for o in pending_preorders:
+            username = f"@{o['username']}" if o.get("username") else f"ID {o['user_id']}"
+            oid = o["id"]
+            product_name = escape_md(o.get("product_name", "N/A"))
+            lines.append(
+                f"🆔 `#{oid}` | {username}\n"
+                f"📦 *{product_name}* x{o['quantity']} = *Rp {format_rupiah(o['total'])}*\n"
+                f"📅 {o['created_at']}\n"
+            )
+            buttons.append([InlineKeyboardButton(f"📦 Proses #{oid}", callback_data=f"admin:preorder_process:{oid}")])
+
+        buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="menu:admin")])
+        await _safe_edit_or_send(
+            query,
+            "\n".join(lines),
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+    elif action.startswith("preorder_process:"):
+        order_id = action.split(":")[1]
+        order = db.get_order(order_id)
+        if not order:
+            await query.answer("Pesanan tidak ditemukan.", show_alert=True)
+            return
+
+        context.user_data["admin_state"] = f"preorder_fulfill:{order_id}"
+        product = db.get_product(order.get("product_id", 1))
+        product_name = escape_md(product["name"]) if product else "N/A"
+
+        text = (
+            f"📝 *PROSES PESANAN PRE-ORDER #{order_id}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Pembeli: ID `{order['user_id']}`\n"
+            f"📦 Produk: *{product_name}*\n"
+            f"🔢 Jumlah: {order['quantity']} akun\n"
+            f"💰 Total: *Rp {format_rupiah(order['total'])}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👉 *Silakan kirimkan data produk / akun / lisensi untuk pesanan ini* (Balas dengan pesan teks atau kirim file `.txt`):"
+        )
+        await _safe_edit_or_send(query, text, reply_markup=get_admin_back_keyboard(lang))
 
     elif action == "adminlist":
         lines = [f"{t('admin_list_title', lang)}\n"]
@@ -1728,7 +1800,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         for u in users[:15]:
             name = f"@{u['username']}" if u.get("username") else u.get("first_name", str(u["user_id"]))
             ban_icon = "🚫" if u.get("is_banned") else ""
-            lines.append(f"• {ban_icon} {name} | {u.get('total_orders', 0)} orders | Rp {format_rupiah(u.get('total_spent', 0))}")
+            lines.append(f"{ban_icon} {name} | {u.get('total_orders', 0)} orders | Rp {format_rupiah(u.get('total_spent', 0))}")
             buttons.append([InlineKeyboardButton(
                 f"👤 {name} ({u.get('total_orders', 0)} orders)",
                 callback_data=f"admin:userdetail:{u['user_id']}",

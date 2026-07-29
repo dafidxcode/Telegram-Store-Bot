@@ -161,12 +161,18 @@ async def api_dashboard_summary(request: Request):
     }
 
 
+@app.get("/api/analytics/chart")
+async def api_get_chart_analytics(request: Request):
+    await _verify_admin(request)
+    return db.get_chart_analytics()
+
+
 # ---------------------------------------------------------------------------
 # Products Management APIs
 # ---------------------------------------------------------------------------
 
 @app.get("/api/products")
-async def api_get_products(request: Request):
+async def api_get_products(request: Request, page: Optional[int] = None, limit: int = 10, all: bool = False):
     await _verify_admin(request)
     products = db.get_all_products()
     result = []
@@ -174,7 +180,23 @@ async def api_get_products(request: Request):
         p_dict = dict(p)
         p_dict["stock_count"] = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
         result.append(p_dict)
-    return {"products": result}
+
+    if all or page is None:
+        return {"products": result, "total": len(result)}
+
+    total = len(result)
+    page_val = max(1, page)
+    offset = (page_val - 1) * limit
+    paginated = result[offset:offset + limit]
+    total_pages = (total + limit - 1) // limit if limit > 0 else 1
+
+    return {
+        "products": paginated,
+        "total": total,
+        "page": page_val,
+        "pages": total_pages,
+        "limit": limit
+    }
 
 
 @app.post("/api/products/add")
@@ -201,6 +223,7 @@ async def api_update_product(pid: int, request: Request):
     name = body.get("name")
     price = body.get("price")
     description = body.get("description")
+    stock_type = body.get("stock_type")
     is_active = body.get("is_active")
 
     kwargs = {}
@@ -210,6 +233,8 @@ async def api_update_product(pid: int, request: Request):
         kwargs["price"] = int(price)
     if description is not None:
         kwargs["description"] = str(description).strip()
+    if stock_type is not None:
+        kwargs["stock_type"] = str(stock_type).strip()
     if is_active is not None:
         kwargs["is_active"] = int(is_active)
 
@@ -233,6 +258,31 @@ async def api_fix_product_ids(request: Request):
     await _verify_admin(request)
     db.renumber_products()
     return {"success": True}
+
+
+@app.post("/api/products/{pid}/reorder")
+async def api_reorder_product(pid: int, request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    direction = str(body.get("direction", "")).lower()
+
+    all_products = db.get_all_products()
+    ids = [p["id"] for p in all_products]
+
+    if pid not in ids:
+        return JSONResponse(status_code=404, content={"error": "Produk tidak ditemukan"})
+
+    idx = ids.index(pid)
+    if direction == "up" and idx > 0:
+        target_id = ids[idx - 1]
+        db.swap_products(pid, target_id)
+        return {"success": True}
+    elif direction == "down" and idx < len(ids) - 1:
+        target_id = ids[idx + 1]
+        db.swap_products(pid, target_id)
+        return {"success": True}
+
+    return JSONResponse(status_code=400, content={"error": "Urutan tidak dapat diubah lagi"})
 
 
 
@@ -356,19 +406,51 @@ async def api_update_stock_items_status_bulk(request: Request):
     return {"success": True, "updated_count": count, "status": new_status}
 
 
+@app.post("/api/stock/items/move-bulk")
+async def api_move_stock_items_bulk(request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    stock_ids = body.get("ids", [])
+    target_product_id = int(body.get("target_product_id", 0))
+    if not isinstance(stock_ids, list):
+        return JSONResponse(status_code=400, content={"error": "Parameter ids tidak valid"})
+    count = db.move_stock_items_bulk([int(i) for i in stock_ids if str(i).isdigit()], target_product_id)
+    return {"success": True, "moved_count": count, "target_product_id": target_product_id}
+
+
+
 
 # ---------------------------------------------------------------------------
 # Orders & Financial Reports APIs
 # ---------------------------------------------------------------------------
 
 @app.get("/api/orders")
-async def api_get_orders(request: Request, status: Optional[str] = None, query: Optional[str] = None, limit: int = 100):
+async def api_get_orders(
+    request: Request,
+    status: Optional[str] = None,
+    query: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10
+):
     await _verify_admin(request)
     if query:
         orders = db.search_orders(query)
     else:
-        orders = db.get_all_orders(limit=limit, status=status)
-    return {"orders": orders}
+        orders = db.get_all_orders(limit=1000, status=status)
+
+    total = len(orders)
+    page_val = max(1, page)
+    offset = (page_val - 1) * limit
+    paginated = orders[offset:offset + limit]
+    total_pages = (total + limit - 1) // limit if limit > 0 else 1
+
+    return {
+        "orders": paginated,
+        "total": total,
+        "page": page_val,
+        "pages": total_pages,
+        "limit": limit
+    }
 
 
 @app.post("/api/orders/{order_id}/approve")
@@ -378,78 +460,115 @@ async def api_approve_order(order_id: str, request: Request):
     if not order:
         return JSONResponse(status_code=404, content={"error": "Order tidak ditemukan"})
 
-    if order.get("status") == "paid":
+    if order.get("status") in ("paid", "delivered"):
         return JSONResponse(content={"success": True, "message": "Order sudah berstatus PAID sebelumnya"})
 
     db.update_order_status(order_id, "paid")
 
     delivered_count = 0
     try:
-        from telegram import Bot
+        from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+        from telegram.constants import ParseMode
+        from handlers.start import get_main_menu_keyboard, escape_md, format_rupiah
+
         quantity = order["quantity"]
         product_id = order.get("product_id", 1)
         user_id = order["user_id"]
         user_lang = db.get_user_lang(user_id)
         product = db.get_product(product_id)
         product_name = product["name"] if product else "N/A"
+        is_preorder = product and product.get("stock_type") == "preorder"
+        bot = Bot(token=config.BOT_TOKEN)
 
-        stock_items = db.take_stock(order_id, quantity, product_id=product_id)
-        delivered_count = len(stock_items)
-        if stock_items:
-            product_desc = (product.get("description") or "").strip() if product else ""
-            txt_content = ""
-            if product_desc:
-                txt_content += f"==================================================\n"
-                txt_content += f"CATATAN / PANDUAN PENGGUNAAN ({product_name}):\n"
-                txt_content += f"{product_desc}\n"
-                txt_content += f"==================================================\n\n"
-
-            for item in stock_items:
-                em = item.get("email", "")
-                pw = item.get("password", "")
-                bal = item.get("balance", "")
-                if pw and bal:
-                    txt_content += f"{em}:{pw}:{bal}\n"
-                elif pw:
-                    txt_content += f"{em}:{pw}\n"
-                else:
-                    txt_content += f"{em}\n"
-
-            txt_bytes = txt_content.encode("utf-8")
-            txt_file = io.BytesIO(txt_bytes)
-            txt_file.name = f"accounts_{order_id}.txt"
-            bot = Bot(token=config.BOT_TOKEN)
-
-            caption = (
-                f"{t('payment_success', user_lang)}\n"
+        if is_preorder:
+            buyer_text = (
+                f"✅ *PEMBAYARAN PRE-ORDER BERHASIL!*\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"{t('order_label', user_lang)}: #{order_id}\n"
-                f"{t('product_label', user_lang)}: {escape_md(product_name)}\n"
-                f"{t('quantity_label_short', user_lang)}: {quantity} {t('accounts', user_lang)}\n"
-                f"{t('total_label', user_lang)}: Rp {format_rupiah(order.get('total', 0))}\n"
+                f"🆔 Pesanan: `#{order_id}`\n"
+                f"📦 Produk: *{escape_md(product_name)}*\n"
+                f"🔢 Jumlah: {quantity} akun\n"
+                f"💰 Total: *Rp {format_rupiah(order.get('total', 0))}*\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"{t('file_attached', user_lang)}"
+                f"⏳ *Pesanan Anda sedang diproses oleh Admin.*\n"
+                f"Data produk/hasil pengerjaan akan dikirimkan via Bot Telegram ini setelah proses pengerjaan selesai.\n\n"
+                f"Mohon ditunggu ya! Terima kasih 🙏"
             )
-
-            await bot.send_document(
+            await bot.send_message(
                 chat_id=user_id,
-                document=txt_file,
-                caption=caption,
+                text=buyer_text,
+                parse_mode=ParseMode.MARKDOWN,
                 reply_markup=get_main_menu_keyboard(user_id, user_lang),
             )
 
-            qris_msg_id = order.get("qris_message_id")
-            if qris_msg_id:
+            for admin_id in config.ADMIN_IDS:
                 try:
-                    await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+                    await bot.send_message(
+                        chat_id=admin_id,
+                        text=f"📦 *PRE-ORDER BARU PERLU DIPROSES!*\n\nOrder ID: `#{order_id}`\nProduk: *{escape_md(product_name)}*\nBuyer: `{user_id}`",
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton(f"📦 Proses #{order_id}", callback_data=f"admin:preorder_process:{order_id}")]
+                        ]),
+                    )
                 except Exception:
                     pass
+        else:
+            stock_items = db.take_stock(order_id, quantity, product_id=product_id)
+            delivered_count = len(stock_items)
+            if stock_items:
+                product_desc = (product.get("description") or "").strip() if product else ""
+                txt_content = ""
+                if product_desc:
+                    txt_content += f"==================================================\n"
+                    txt_content += f"CATATAN / PANDUAN PENGGUNAAN ({product_name}):\n"
+                    txt_content += f"{product_desc}\n"
+                    txt_content += f"==================================================\n\n"
 
+                for item in stock_items:
+                    em = item.get("email", "")
+                    pw = item.get("password", "")
+                    bal = item.get("balance", "")
+                    if pw and bal:
+                        txt_content += f"{em}:{pw}:{bal}\n"
+                    elif pw:
+                        txt_content += f"{em}:{pw}\n"
+                    else:
+                        txt_content += f"{em}\n"
+
+                txt_bytes = txt_content.encode("utf-8")
+                txt_file = io.BytesIO(txt_bytes)
+                txt_file.name = f"accounts_{order_id}.txt"
+
+                caption = (
+                    f"{t('payment_success', user_lang)}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"{t('order_label', user_lang)}: #{order_id}\n"
+                    f"{t('product_label', user_lang)}: {escape_md(product_name)}\n"
+                    f"{t('quantity_label_short', user_lang)}: {quantity} {t('accounts', user_lang)}\n"
+                    f"{t('total_label', user_lang)}: Rp {format_rupiah(order.get('total', 0))}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"{t('file_attached', user_lang)}"
+                )
+
+                await bot.send_document(
+                    chat_id=user_id,
+                    document=txt_file,
+                    caption=caption,
+                    reply_markup=get_main_menu_keyboard(user_id, user_lang),
+                )
+
+        qris_msg_id = order.get("qris_message_id")
+        if qris_msg_id:
             try:
-                from notifier import send_channel_purchase_notif
-                await send_channel_purchase_notif(bot, order, product_name)
-            except Exception as e:
-                logger.warning("Failed to send channel purchase notif: %s", e)
+                await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+            except Exception:
+                pass
+
+        try:
+            from notifier import send_channel_purchase_notif
+            await send_channel_purchase_notif(bot, order, product_name)
+        except Exception as e:
+            logger.warning("Failed to send channel purchase notif: %s", e)
 
         # --- Apply referral commission ---
         try:
@@ -492,6 +611,84 @@ async def api_cancel_order(order_id: str, request: Request):
     db.update_order_status(order_id, "cancelled")
     released = db.release_stock(order_id)
     return {"success": True, "released_stock": released}
+
+
+@app.post("/api/orders/{order_id}/deliver-preorder")
+async def api_deliver_preorder(order_id: str, request: Request):
+    await _verify_admin(request)
+    body = await request.json()
+    content = str(body.get("content", "")).strip()
+
+    if not content:
+        return JSONResponse(status_code=400, content={"error": "Isi data produk/akun tidak boleh kosong!"})
+
+    order = db.get_order(order_id)
+    if not order:
+        return JSONResponse(status_code=404, content={"error": "Order tidak ditemukan"})
+
+    product = db.get_product(order.get("product_id", 1))
+    product_name = product["name"] if product else "N/A"
+    user_id = order["user_id"]
+    user_lang = db.get_user_lang(user_id)
+
+    # Save purchase detail & update order status
+    db.save_purchase_detail(
+        order_id=order_id,
+        user_id=user_id,
+        product_name=product_name,
+        accounts_delivered=content,
+    )
+    db.update_order_status(order_id, "delivered")
+
+    # Send via Telegram bot to buyer
+    try:
+        from telegram import Bot
+        from telegram.constants import ParseMode
+        from handlers.start import get_main_menu_keyboard, escape_md, format_rupiah
+
+        bot = Bot(token=config.BOT_TOKEN)
+        buyer_text = (
+            f"🎉 *PESANAN PRE-ORDER SELESAI!*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 Pesanan: `#{order_id}`\n"
+            f"📦 Produk: *{escape_md(product_name)}*\n"
+            f"🔢 Jumlah: {order['quantity']} akun\n"
+            f"💰 Total: *Rp {format_rupiah(order['total'])}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔐 *Data Produk / Akun Anda:*\n"
+            f"```\n{content}\n```\n\n"
+            f"Terima kasih telah berbelanja! 🙏"
+        )
+        await bot.send_message(
+            chat_id=user_id,
+            text=buyer_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_main_menu_keyboard(user_id, user_lang),
+        )
+    except Exception as e:
+        logger.warning("Failed to send web delivered preorder to user %s: %s", user_id, e)
+
+    return {"success": True, "message": f"Pre-Order #{order_id} berhasil dikirimkan ke buyer"}
+
+
+@app.get("/api/users")
+async def api_get_users(
+    request: Request,
+    query: Optional[str] = None,
+    filter_by: Optional[str] = None,
+    page: int = 1,
+    limit: int = 25
+):
+    await _verify_admin(request)
+    users, total = db.get_users_paginated(search=query, filter_by=filter_by, page=page, limit=limit)
+    total_pages = (total + limit - 1) // limit if limit > 0 else 1
+    return {
+        "users": users,
+        "total": total,
+        "page": page,
+        "pages": total_pages,
+        "limit": limit
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -365,11 +365,12 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     buttons = []
     for p in products:
-        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else "∞"
+        if p["stock_type"] == "limited" and db.get_stock_count(p["id"]) <= 0:
+            continue
         p_name = escape_md(p['name'])
         btn_title = p_name if p_name.startswith(("🛒", "🛍️", "📦")) else f"🛒 {p_name}"
         buttons.append([InlineKeyboardButton(
-            f"{btn_title} - Rp {format_rupiah(p['price'])} (📦 {stock})",
+            btn_title,
             callback_data=f"buy:{p['id']}",
         )])
     buttons.append([InlineKeyboardButton(t("cancel", lang), callback_data="buy:cancel")])
@@ -422,14 +423,17 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def _show_product_detail(query, product, qty, stock, lang="en"):
     total = product["price"] * qty
-    stock_text = f"{stock} {t('accounts', lang)}" if stock else t("unlimited", lang)
+    if product.get("stock_type") == "preorder":
+        stock_text = t("preorder_stock_text", lang)
+    else:
+        stock_text = f"{stock} {t('accounts', lang)}" if stock > 0 else t("out_of_stock", lang)
     price_str = format_rupiah(product['price'])
 
     detail = product.get("description", "")
     detail_lines = detail.split("\n") if detail else []
     detail_text = ""
     if detail_lines:
-        detail_text = "\n".join(f"• {escape_md(line.strip())}" for line in detail_lines if line.strip()) + "\n\n"
+        detail_text = "\n".join(f" {escape_md(line.strip())}" for line in detail_lines if line.strip()) + "\n\n"
 
     text = (
         f"*{escape_md(product['name'])}*\n"
@@ -439,8 +443,8 @@ async def _show_product_detail(query, product, qty, stock, lang="en"):
         f"{t('pricing', lang)}\n"
         f"{t('pricing_per_account', lang, price=price_str)}\n\n"
         f"{t('stock_heading', lang)}\n"
-        f"• {t('available', lang)} : {stock_text}\n"
-        f"• {t('minimum', lang)}   : 1 {t('accounts', lang)}\n"
+        f"{t('available', lang)} : {stock_text}\n"
+        f"{t('minimum', lang)}   : 1 {t('accounts', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{t('your_order', lang)}\n"
         f"{t('quantity', lang)}    : {qty} {t('accounts', lang)}\n"

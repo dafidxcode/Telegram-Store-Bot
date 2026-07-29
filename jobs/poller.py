@@ -124,6 +124,57 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
 
             product = db.get_product(product_id)
             product_name = product["name"] if product else "N/A"
+            stock_type = product.get("stock_type", "limited") if product else "limited"
+
+            if stock_type == "preorder":
+                buyer_msg = t("preorder_paid_buyer", user_lang,
+                              order_id=order_id,
+                              product_name=escape_md(product_name),
+                              qty=quantity,
+                              total=format_rupiah(order["total"]))
+                try:
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=buyer_msg,
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=get_main_menu_keyboard(user_id, user_lang),
+                    )
+                except Exception as e:
+                    logger.warning("Failed to send preorder buyer notice %s: %s", order_id, e)
+
+                qris_msg_id = order.get("qris_message_id")
+                if qris_msg_id:
+                    try:
+                        await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+                    except Exception:
+                        pass
+
+                try:
+                    user_name = f"@{order.get('username')}" if order.get("username") else str(user_id)
+                    for admin_id in config.ADMIN_IDS:
+                        admin_text = (
+                            f"⏳ *PESANAN PRE-ORDER BARU!*\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🆔 Pesanan: *#{order_id}*\n"
+                            f"👤 Pengguna: {user_name} (ID: `{user_id}`)\n"
+                            f"📦 Produk: *{escape_md(product_name)}*\n"
+                            f"🔢 Jumlah: {quantity} akun\n"
+                            f"💰 Total: *Rp {format_rupiah(order['total'])}*\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                            f"💡 Klik tombol di bawah ini untuk memproses & mengirimkan data produk ke pengguna."
+                        )
+                        admin_keyboard = InlineKeyboardMarkup([
+                            [InlineKeyboardButton(f"📦 Proses #{order_id}", callback_data=f"admin:preorder_process:{order_id}")],
+                        ])
+                        await bot.send_message(
+                            chat_id=admin_id,
+                            text=admin_text,
+                            parse_mode=ParseMode.MARKDOWN,
+                            reply_markup=admin_keyboard,
+                        )
+                except Exception as e:
+                    logger.warning("Failed to send preorder admin notif: %s", e)
+                continue
 
             stock_items = db.take_stock(order_id, quantity, product_id=product_id)
 

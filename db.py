@@ -311,6 +311,37 @@ def update_product(product_id: int, **kwargs) -> bool:
     return cur.rowcount > 0
 
 
+def swap_products(id1: int, id2: int) -> bool:
+    """Swap IDs and associated foreign key data of two products."""
+    assert _conn is not None
+    try:
+        p1 = get_product(id1)
+        p2 = get_product(id2)
+        if not p1 or not p2:
+            return False
+
+        temp_id = -9999
+
+        for tbl in ["stock", "orders", "vouchers"]:
+            try:
+                _conn.execute(f"UPDATE {tbl} SET product_id = ? WHERE product_id = ?", (temp_id, id1))
+                _conn.execute(f"UPDATE {tbl} SET product_id = ? WHERE product_id = ?", (id1, id2))
+                _conn.execute(f"UPDATE {tbl} SET product_id = ? WHERE product_id = ?", (id2, temp_id))
+            except Exception:
+                pass
+
+        _conn.execute("UPDATE products SET id = ? WHERE id = ?", (temp_id, id1))
+        _conn.execute("UPDATE products SET id = ? WHERE id = ?", (id1, id2))
+        _conn.execute("UPDATE products SET id = ? WHERE id = ?", (id2, temp_id))
+
+        _conn.commit()
+        return True
+    except Exception as e:
+        logger_d = __import__("logging").getLogger(__name__)
+        logger_d.exception("Error swapping products %s and %s: %s", id1, id2, e)
+        return False
+
+
 def delete_product(product_id: int) -> bool:
     assert _conn is not None
     cur = _conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
@@ -331,6 +362,11 @@ def renumber_products() -> bool:
             return True
 
         old_ids = [r["id"] for r in rows]
+
+        # Step 0: Isolate orphan stock (stock belonging to deleted products) to product_id = 0 so they don't contaminate active products
+        if old_ids:
+            placeholders = ",".join("?" for _ in old_ids)
+            _conn.execute(f"UPDATE stock SET product_id = 0 WHERE product_id NOT IN ({placeholders}) AND product_id > 0", old_ids)
 
         # Step 1: Map old_id to temporary negative ID (-idx) to prevent unique constraint conflicts
         for idx, old_id in enumerate(old_ids, 1):
@@ -358,6 +394,7 @@ def renumber_products() -> bool:
         logger_d = __import__("logging").getLogger(__name__)
         logger_d.exception("Error renumbering products: %s", e)
         return False
+
 
 
 
@@ -477,9 +514,12 @@ def get_stock_items(
     where_clauses = []
     params: list = []
 
-    if product_id is not None and product_id > 0:
-        where_clauses.append("s.product_id = ?")
-        params.append(product_id)
+    if product_id is not None:
+        if product_id == 0:
+            where_clauses.append("(s.product_id = 0 OR s.product_id NOT IN (SELECT id FROM products))")
+        elif product_id > 0:
+            where_clauses.append("s.product_id = ?")
+            params.append(product_id)
 
     if status and status in ("ready", "sold"):
         where_clauses.append("s.status = ?")
@@ -563,6 +603,21 @@ def update_stock_items_status_bulk(stock_ids: list[int], status: str) -> int:
     return cur.rowcount
 
 
+def move_stock_items_bulk(stock_ids: list[int], target_product_id: int) -> int:
+    """Move specified stock IDs to target product ID."""
+    assert _conn is not None
+    if not stock_ids:
+        return 0
+    placeholders = ",".join("?" for _ in stock_ids)
+    cur = _conn.execute(
+        f"UPDATE stock SET product_id = ? WHERE id IN ({placeholders})",
+        [target_product_id] + stock_ids,
+    )
+    _conn.commit()
+    return cur.rowcount
+
+
+
 
 # ---------------------------------------------------------------------------
 # Orders
@@ -600,14 +655,17 @@ def save_order_qris_message_id(order_id: str, message_id: int) -> None:
 
 def get_order(order_id: str) -> dict | None:
     assert _conn is not None
-    row = _conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+    row = _conn.execute(
+        "SELECT o.*, p.name as product_name, p.stock_type FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.id = ?",
+        (order_id,),
+    ).fetchone()
     return _row_to_dict(row)
 
 
 def get_user_orders(user_id: int) -> list[dict]:
     assert _conn is not None
     rows = _conn.execute(
-        "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
+        "SELECT o.*, p.name as product_name, p.stock_type FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.user_id = ? ORDER BY o.created_at DESC LIMIT 20",
         (user_id,),
     ).fetchall()
     return [_row_to_dict(r) for r in rows]
@@ -615,14 +673,15 @@ def get_user_orders(user_id: int) -> list[dict]:
 
 def get_all_orders(limit: int = 50, status: str | None = None) -> list[dict]:
     assert _conn is not None
+    sql = "SELECT o.*, p.name as product_name, p.stock_type FROM orders o LEFT JOIN products p ON o.product_id = p.id"
     if status is None:
         rows = _conn.execute(
-            "SELECT * FROM orders ORDER BY created_at DESC LIMIT ?",
+            f"{sql} ORDER BY o.created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
     else:
         rows = _conn.execute(
-            "SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            f"{sql} WHERE o.status = ? ORDER BY o.created_at DESC LIMIT ?",
             (status, limit),
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
@@ -728,6 +787,59 @@ def get_all_user_ids() -> list[int]:
     return [int(row["user_id"]) for row in rows]
 
 
+def get_users_paginated(
+    search: str | None = None,
+    filter_by: str | None = None,
+    page: int = 1,
+    limit: int = 25,
+) -> tuple[list[dict], int]:
+    """Retrieve paginated users with filtering and sorting (spent_desc, orders_desc, newest, oldest, banned)."""
+    assert _conn is not None
+    offset = max(0, (page - 1) * limit)
+    where_clauses = []
+    params: list = []
+
+    if search:
+        s = search.strip().lstrip("@")
+        if s.isdigit():
+            where_clauses.append("(u.user_id = ? OR u.username LIKE ?)")
+            params.extend([int(s), f"%{s}%"])
+        else:
+            where_clauses.append("(u.username LIKE ? OR u.first_name LIKE ?)")
+            params.extend([f"%{s}%", f"%{s}%"])
+
+    if filter_by == "banned":
+        where_clauses.append("u.is_banned = 1")
+
+    where_str = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    order_by_clause = "ORDER BY total_spent DESC, u.last_seen DESC"
+    if filter_by == "orders_desc":
+        order_by_clause = "ORDER BY total_orders DESC, u.last_seen DESC"
+    elif filter_by == "newest":
+        order_by_clause = "ORDER BY u.last_seen DESC"
+    elif filter_by == "oldest":
+        order_by_clause = "ORDER BY u.user_id ASC"
+    elif filter_by == "spent_desc":
+        order_by_clause = "ORDER BY total_spent DESC, u.last_seen DESC"
+
+    count_sql = f"SELECT COUNT(*) as cnt FROM users u {where_str}"
+    count_row = _conn.execute(count_sql, params).fetchone()
+    total = count_row["cnt"] if count_row else 0
+
+    data_sql = f"""
+        SELECT u.*,
+               COALESCE((SELECT COUNT(*) FROM orders o WHERE o.user_id = u.user_id AND o.status IN ('paid','delivered')), 0) as total_orders,
+               COALESCE((SELECT SUM(o.total) FROM orders o WHERE o.user_id = u.user_id AND o.status IN ('paid','delivered')), 0) as total_spent
+        FROM users u
+        {where_str}
+        {order_by_clause}
+        LIMIT ? OFFSET ?
+    """
+    rows = _conn.execute(data_sql, params + [limit, offset]).fetchall()
+    return ([_row_to_dict(r) for r in rows], total)
+
+
 def get_financial_report() -> dict:
     """Calculate sales revenue metrics (today, 7 days, 30 days, total all time, best seller)."""
     assert _conn is not None
@@ -794,15 +906,16 @@ def search_orders(query: str) -> list[dict]:
     """Search orders by order ID (partial/exact) or Telegram user_id / username."""
     assert _conn is not None
     query = query.strip()
+    sql = "SELECT o.*, p.name as product_name, p.stock_type FROM orders o LEFT JOIN products p ON o.product_id = p.id"
     if query.isdigit():
         rows = _conn.execute(
-            "SELECT * FROM orders WHERE user_id = ? OR id = ? ORDER BY created_at DESC LIMIT 20",
+            f"{sql} WHERE o.user_id = ? OR o.id = ? ORDER BY o.created_at DESC LIMIT 20",
             (int(query), query),
         ).fetchall()
     else:
         clean_q = query.lstrip("@")
         rows = _conn.execute(
-            "SELECT * FROM orders WHERE id LIKE ? OR username LIKE ? ORDER BY created_at DESC LIMIT 20",
+            f"{sql} WHERE o.id LIKE ? OR o.username LIKE ? ORDER BY o.created_at DESC LIMIT 20",
             (f"%{query}%", f"%{clean_q}%"),
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
@@ -1278,4 +1391,85 @@ def get_withdrawal_request(request_id: int) -> dict | None:
         (request_id,),
     ).fetchone()
     return _row_to_dict(row)
+
+
+def get_pending_preorders() -> list[dict]:
+    """Get orders that are paid and belong to a preorder product, but not yet delivered."""
+    assert _conn is not None
+    rows = _conn.execute(
+        """SELECT o.*, p.name as product_name, p.description as product_desc
+           FROM orders o
+           JOIN products p ON o.product_id = p.id
+           WHERE (o.status = 'paid' OR o.status = 'preorder_paid')
+             AND p.stock_type = 'preorder'
+             AND o.id NOT IN (SELECT order_id FROM purchase_details)
+           ORDER BY o.created_at ASC"""
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_chart_analytics() -> dict:
+    """Calculate realtime sales chart analytics (hourly, daily, monthly, yearly)."""
+    assert _conn is not None
+    from datetime import datetime, timedelta
+
+    # 1. Hourly (Today 00:00 - 23:00)
+    hourly_rows = _conn.execute("""
+        SELECT strftime('%H', paid_at) as hr, COALESCE(SUM(total), 0) as rev
+        FROM orders
+        WHERE status = 'paid' AND date(paid_at) = date('now')
+        GROUP BY hr ORDER BY hr ASC
+    """).fetchall()
+    hourly_map = {r["hr"]: r["rev"] for r in hourly_rows if r["hr"]}
+    hourly_labels = [f"{h:02d}:00" for h in range(24)]
+    hourly_data = [hourly_map.get(f"{h:02d}", 0) for h in range(24)]
+
+    # 2. Daily (Last 7 days)
+    daily_rows = _conn.execute("""
+        SELECT date(paid_at) as dt, COALESCE(SUM(total), 0) as rev
+        FROM orders
+        WHERE status = 'paid' AND paid_at >= datetime('now', '-6 days', 'start of day')
+        GROUP BY dt ORDER BY dt ASC
+    """).fetchall()
+    daily_map = {r["dt"]: r["rev"] for r in daily_rows if r["dt"]}
+    today_dt = datetime.now()
+    daily_labels = []
+    daily_data = []
+    for i in range(6, -1, -1):
+        d_obj = today_dt - timedelta(days=i)
+        d_str = d_obj.strftime("%Y-%m-%d")
+        d_label = d_obj.strftime("%d %b")
+        daily_labels.append(d_label)
+        daily_data.append(daily_map.get(d_str, 0))
+
+    # 3. Monthly (Current Year Jan..Dec)
+    monthly_rows = _conn.execute("""
+        SELECT strftime('%m', paid_at) as mth, COALESCE(SUM(total), 0) as rev
+        FROM orders
+        WHERE status = 'paid' AND strftime('%Y', paid_at) = strftime('%Y', 'now')
+        GROUP BY mth ORDER BY mth ASC
+    """).fetchall()
+    monthly_map = {r["mth"]: r["rev"] for r in monthly_rows if r["mth"]}
+    month_names = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
+    monthly_labels = month_names
+    monthly_data = [monthly_map.get(f"{m:02d}", 0) for m in range(1, 13)]
+
+    # 4. Yearly (Last 5 Years)
+    yearly_rows = _conn.execute("""
+        SELECT strftime('%Y', paid_at) as yr, COALESCE(SUM(total), 0) as rev
+        FROM orders
+        WHERE status = 'paid'
+        GROUP BY yr ORDER BY yr ASC
+    """).fetchall()
+    yearly_map = {r["yr"]: r["rev"] for r in yearly_rows if r["yr"]}
+    curr_yr = today_dt.year
+    yearly_labels = [str(y) for y in range(curr_yr - 4, curr_yr + 1)]
+    yearly_data = [yearly_map.get(str(y), 0) for y in range(curr_yr - 4, curr_yr + 1)]
+
+    return {
+        "jam": {"labels": hourly_labels, "data": hourly_data},
+        "hari": {"labels": daily_labels, "data": daily_data},
+        "bulan": {"labels": monthly_labels, "data": monthly_data},
+        "tahun": {"labels": yearly_labels, "data": yearly_data},
+    }
 
