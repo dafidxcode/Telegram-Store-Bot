@@ -707,11 +707,26 @@ async def api_toggle_maintenance(request: Request):
 @app.post("/api/broadcast")
 async def api_send_broadcast(request: Request):
     await _verify_admin(request)
-    body = await request.json()
-    message_text = str(body.get("message", "")).strip()
 
-    if not message_text:
-        return JSONResponse(status_code=400, content={"error": "Pesan broadcast tidak boleh kosong!"})
+    message_text = ""
+    image_url = ""
+    image_bytes = None
+
+    content_type = request.headers.get("content-type", "").lower()
+    if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+        form = await request.form()
+        message_text = str(form.get("message", "")).strip()
+        image_url = str(form.get("image_url", "")).strip()
+        uploaded = form.get("image")
+        if uploaded and hasattr(uploaded, "read"):
+            image_bytes = await uploaded.read()
+    else:
+        body = await request.json()
+        message_text = str(body.get("message", "")).strip()
+        image_url = str(body.get("image_url", "")).strip()
+
+    if not message_text and not image_url and not image_bytes:
+        return JSONResponse(status_code=400, content={"error": "Tidak ada konten yang dikirim! Kirim teks, URL gambar, atau upload gambar."})
 
     user_ids = db.get_all_user_ids()
     sent_cnt = 0
@@ -722,7 +737,15 @@ async def api_send_broadcast(request: Request):
         bot = Bot(token=config.BOT_TOKEN)
         for uid in user_ids:
             try:
-                await bot.send_message(chat_id=uid, text=message_text, parse_mode="Markdown")
+                if image_bytes:
+                    photo_file = io.BytesIO(image_bytes)
+                    photo_file.seek(0)
+                    photo_file.name = "broadcast.jpg"
+                    await bot.send_photo(chat_id=uid, photo=photo_file, caption=message_text or None, parse_mode="Markdown")
+                elif image_url:
+                    await bot.send_photo(chat_id=uid, photo=image_url, caption=message_text or None, parse_mode="Markdown")
+                elif message_text:
+                    await bot.send_message(chat_id=uid, text=message_text, parse_mode="Markdown")
                 sent_cnt += 1
             except Exception:
                 failed_cnt += 1

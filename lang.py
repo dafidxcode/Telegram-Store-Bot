@@ -264,7 +264,7 @@ T = {
 
     # Admin — broadcast
     "admin_broadcast":      {"en": "*📣 BROADCAST*",        "id": "*📣 BROADCAST PESAN*"},
-    "admin_send_message":   {"en": "📝 Send the *message* to broadcast now.\n\nExample: `Weekend promo 20% off!`", "id": "📝 Kirim *pesan broadcast* sekarang.\n\nContoh: `Promo hemat 50%!`"},
+    "admin_send_message":   {"en": "📝 Send the *message* to broadcast now.\n📷 Or send a *photo* with caption.\n\nExamples:\n`Weekend promo 20% off!`\n(Or send a photo with caption)", "id": "📝 Kirim *pesan* broadcast sekarang.\n📷 Atau kirim *foto* dengan caption.\n\nContoh:\n`Promo hemat 50%!`\n(Atau kirim foto dengan caption)"},
     "admin_broadcast_done": {"en": "*✅ Broadcast complete!*", "id": "*✅ Broadcast selesai!*"},
     "admin_sent":           {"en": "📤 Sent",               "id": "📤 Terkirim"},
     "admin_failed":         {"en": "❌ Failed",             "id": "❌ Gagal"},
@@ -335,7 +335,7 @@ T = {
     "cmd_editproduct_usage":  {"en": "*✏️ EDIT PRODUCT*\n\nUse: `/editproduct <id> <field>=<value>`\n\n*Fields:* name, price, description, stock_type, stock_count, duration, is_active\n\n*Examples:*\n`/editproduct 1 price=15000`\n`/editproduct 1 name=Leonardo Pro`\n`/editproduct 1 is_active=0` (deactivate)", "id": "*✏️ EDIT PRODUK*\n\nGunakan: `/editproduct <id> <field>=<nilai>`\n\n*Medan:* name, price, description, stock_type, stock_count, duration, is_active\n\n*Contoh:*\n`/editproduct 1 price=15000`\n`/editproduct 1 name=Leonardo Pro`\n`/editproduct 1 is_active=0` (nonaktif)"},
     "cmd_addproduct_usage":   {"en": "💡 Format: `/addproduct ProductName|Price|Description`\n\n*Examples:*\n`/addproduct Leonardo|10000|Leonardo AI Account`\n`/addproduct GSuite|100000|GSuite 30 days`", "id": "💡 Format: `/addproduct NamaProduk|Harga|Deskripsi`\n\n*Contoh:*\n`/addproduct Canva|1000|Canva Pro 1 Bulan`"},
     "cmd_setprice_usage":     {"en": "💡 Use: `/setprice <product_id> <new_price>`\n\n*Example:*\n`/setprice 1 15000`", "id": "💡 Gunakan: `/setprice <product_id> <harga_baru>`\n\n*Contoh:* `/setprice 1 15000`"},
-    "cmd_broadcast_usage":     {"en": "💡 Use: `/broadcast <message>`\n\n*Example:* `/broadcast Weekend promo 20% off!`", "id": "💡 Gunakan: `/broadcast <pesan>`\n\n*Contoh:* `/broadcast Promo diskon 20%!`"},
+    "cmd_broadcast_usage":     {"en": "💡 Use: `/broadcast <message>`\n💡 With image: `/broadcast --img=<url> <message>`\n\n*Examples:*\n`/broadcast Weekend promo 20% off!`\n`/broadcast --img=https://example.com/promo.jpg Promo spesial!`", "id": "💡 Gunakan: `/broadcast <pesan>`\n💡 Dengan gambar: `/broadcast --img=<url> <pesan>`\n\n*Contoh:*\n`/broadcast Promo diskon 20%!`\n`/broadcast --img=https://example.com/promo.jpg Promo spesial!`"},
     "cmd_addadmin_usage":     {"en": "💡 Use: `/addadmin <telegram_user_id>`\n\n*Example:* `/addadmin 123456789`\n\n💡 To find ID: Forward a message to @userinfobot", "id": "💡 Gunakan: `/addadmin <telegram_user_id>`\n\n*Contoh:* `/addadmin 123456789`\n\n💡 Untuk cari ID: Forward pesan ke @userinfobot"},
     "cmd_removeadmin_usage":  {"en": "💡 Use: `/removeadmin <telegram_user_id>`\n\n⚠️ Cannot remove the main admin.", "id": "💡 Gunakan: `/removeadmin <telegram_user_id>`\n\n⚠️ Tidak dapat menghapus admin utama."},
     "date_label":             {"en": "📅 Date", "id": "📅 Tanggal"},

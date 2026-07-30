@@ -279,9 +279,9 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
 
     if admin_state == "broadcast_msg":
         message = update.message
-        if message is None or not message.text:
+        if message is None:
             return
-        broadcast_text = message.text.strip()
+
         context.user_data.pop("admin_state", None)
 
         try:
@@ -292,12 +292,32 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
 
         success = 0
         failed = 0
-        for uid in user_ids:
-            try:
-                await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
-                success += 1
-            except Exception:
-                failed += 1
+
+        if message.photo:
+            photo = message.photo[-1]
+            broadcast_caption = (message.caption or "").strip()
+            for uid in user_ids:
+                try:
+                    await context.bot.send_photo(
+                        chat_id=uid,
+                        photo=photo.file_id,
+                        caption=broadcast_caption or None,
+                        parse_mode=ParseMode.MARKDOWN,
+                    )
+                    success += 1
+                except Exception:
+                    failed += 1
+        elif message.text:
+            broadcast_text = message.text.strip()
+            for uid in user_ids:
+                try:
+                    await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
+                    success += 1
+                except Exception:
+                    failed += 1
+        else:
+            await message.reply_text(t("admin_try_again", lang), reply_markup=_admin_back_keyboard(lang))
+            return
 
         await message.reply_text(
             f"{t('admin_broadcast_done', lang)}\n\n"
@@ -886,14 +906,19 @@ async def cmd_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    lines = [f"{t('admin_product_list', lang)}\n"]
+    lines = [f"{t('admin_product_list', lang)}\n━━━━━━━━━━━━━━━━━━━━━━━━\n"]
     for i, p in enumerate(products, 1):
-        stock = db.get_stock_count(p["id"]) if p["stock_type"] == "limited" else t("unlimited", lang)
-        status = "✅" if p["is_active"] else "❌"
+        if p["stock_type"] == "preorder":
+            stock = "⏳ Pre-Order"
+        else:
+            cnt = db.get_stock_count(p["id"])
+            stock = "❌ Habis (0 akun)" if cnt == 0 else f"{cnt} akun"
+
+        status = "✅" if p["is_active"] else "🔴 (Nonaktif)"
         lines.append(
-            f"{status} {get_num_emoji(i)} | *{escape_md(p['name'])}*\n"
-            f"   {t('admin_price', lang)}: Rp {format_rupiah(p['price'])}\n"
-            f"   {t('admin_stock', lang)}: {stock}\n"
+            f"{status} *{get_num_emoji(i)} {escape_md(p['name'])}*\n"
+            f"   💰 {t('admin_price', lang)}: *Rp {format_rupiah(p['price'])}*\n"
+            f"   📦 {t('admin_stock', lang)}: *{stock}*\n"
         )
 
     await update.message.reply_text(
@@ -1174,8 +1199,18 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_id = update.effective_user.id if update.effective_user else 0
     lang = get_lang(context, user_id)
 
-    broadcast_text = " ".join(context.args or []).strip()
-    if not broadcast_text:
+    args = context.args or []
+    image_url = None
+    text_parts = []
+    for arg in args:
+        if arg.startswith("--img="):
+            image_url = arg[6:]
+        else:
+            text_parts.append(arg)
+
+    broadcast_text = " ".join(text_parts).strip()
+
+    if not broadcast_text and not image_url:
         await message.reply_text(
             f"{t('admin_broadcast', lang)}\n\n"
             f"{t('cmd_broadcast_usage', lang)}",
@@ -1195,7 +1230,15 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     failed = 0
     for uid in user_ids:
         try:
-            await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
+            if image_url:
+                await context.bot.send_photo(
+                    chat_id=uid,
+                    photo=image_url,
+                    caption=broadcast_text or None,
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+            else:
+                await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
             success += 1
         except Exception:
             failed += 1

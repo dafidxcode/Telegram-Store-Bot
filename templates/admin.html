@@ -1106,10 +1106,22 @@
                     </div>
                     <form id="broadcast-form">
                         <div class="form-group">
-                            <label><i class="fa-solid fa-message"></i> Isi Pesan (Format Markdown Telegram)</label>
+                            <label><i class="fa-solid fa-message"></i> Isi Pesan (Format Markdown, opsional jika ada gambar)</label>
                             <textarea id="broadcast-text" class="form-control"
                                 placeholder="PROMO SPESIAL HARI INI!&#10;&#10;Gunakan kode promo untuk potongan harga..."
-                                required style="min-height: 180px;"></textarea>
+                                style="min-height: 120px;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-image"></i> URL Gambar (opsional)</label>
+                            <input type="url" id="broadcast-image-url" class="form-control"
+                                placeholder="https://example.com/gambar.jpg">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-upload"></i> Atau Upload Gambar (opsional)</label>
+                            <input type="file" id="broadcast-image-file" class="form-control" accept="image/*">
+                        </div>
+                        <div id="broadcast-preview" style="display:none; margin-bottom:12px; text-align:center;">
+                            <img id="broadcast-preview-img" style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid var(--border-color);">
                         </div>
                         <button type="submit" class="btn"><i class="fa-solid fa-paper-plane"></i> Kirim Broadcast ke
                             Semua User</button>
@@ -2258,17 +2270,44 @@
         document.getElementById('broadcast-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const message = document.getElementById('broadcast-text').value.trim();
-            if (!confirm('Kirim pesan broadcast ini ke SELURUH pengguna bot Telegram?')) return;
+            const imageUrl = document.getElementById('broadcast-image-url').value.trim();
+            const imageFile = document.getElementById('broadcast-image-file').files[0];
 
-            const res = await fetch('/api/broadcast', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message })
-            });
+            if (!message && !imageUrl && !imageFile) {
+                showToast('Isi pesan, URL gambar, atau upload gambar terlebih dahulu!', 'error');
+                return;
+            }
+
+            let label = 'Kirim broadcast';
+            if (imageFile) label += ' (dengan upload gambar)';
+            else if (imageUrl) label += ' (dengan URL gambar)';
+            label += ' ke SELURUH pengguna bot Telegram?';
+            if (!confirm(label)) return;
+
+            let res;
+            if (imageFile) {
+                const formData = new FormData();
+                if (message) formData.append('message', message);
+                formData.append('image', imageFile);
+                res = await fetch('/api/broadcast', { method: 'POST', body: formData });
+            } else {
+                const body = { message };
+                if (imageUrl) body.image_url = imageUrl;
+                res = await fetch('/api/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            }
             const data = await res.json();
             if (res.ok) {
                 showToast(`Broadcast terkirim ke ${data.sent} pengguna (${data.failed} gagal)`, 'success');
                 document.getElementById('broadcast-text').value = '';
+                document.getElementById('broadcast-image-url').value = '';
+                document.getElementById('broadcast-image-file').value = '';
+                document.getElementById('broadcast-preview').style.display = 'none';
+            } else {
+                showToast(data.error || 'Gagal mengirim broadcast', 'error');
             }
         });
 
@@ -2318,6 +2357,44 @@
                 loadAdmins();
             }
         }
+
+        // =========================================================================
+        // BROADCAST IMAGE PREVIEW
+        // =========================================================================
+        ['', '-modal'].forEach(suffix => {
+            const fileInput = document.getElementById('broadcast-image-file' + suffix);
+            const urlInput = document.getElementById('broadcast-image-url' + suffix);
+            const preview = document.getElementById('broadcast-preview' + suffix);
+            const previewImg = document.getElementById('broadcast-preview-img' + suffix);
+
+            if (fileInput) {
+                fileInput.addEventListener('change', () => {
+                    const file = fileInput.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            previewImg.src = e.target.result;
+                            preview.style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        preview.style.display = 'none';
+                    }
+                });
+            }
+
+            if (urlInput) {
+                urlInput.addEventListener('input', () => {
+                    const url = urlInput.value.trim();
+                    if (url) {
+                        previewImg.src = url;
+                        preview.style.display = 'block';
+                    } else if (!fileInput || !fileInput.files[0]) {
+                        preview.style.display = 'none';
+                    }
+                });
+            }
+        });
 
         // =========================================================================
         // USER MANAGEMENT
@@ -2806,20 +2883,45 @@
         document.getElementById('broadcast-form-modal').addEventListener('submit', async (e) => {
             e.preventDefault();
             const message = document.getElementById('broadcast-text-modal').value.trim();
-            if (!confirm('Kirim pesan broadcast ini ke SELURUH pengguna bot Telegram?')) return;
+            const imageUrl = document.getElementById('broadcast-image-url-modal').value.trim();
+            const imageFile = document.getElementById('broadcast-image-file-modal').files[0];
 
-            const res = await fetch('/api/broadcast', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message })
-            });
+            if (!message && !imageUrl && !imageFile) {
+                showToast('Isi pesan, URL gambar, atau upload gambar terlebih dahulu!', 'error');
+                return;
+            }
+
+            let label = 'Kirim broadcast';
+            if (imageFile) label += ' (dengan upload gambar)';
+            else if (imageUrl) label += ' (dengan URL gambar)';
+            label += ' ke SELURUH pengguna bot Telegram?';
+            if (!confirm(label)) return;
+
+            let res;
+            if (imageFile) {
+                const formData = new FormData();
+                if (message) formData.append('message', message);
+                formData.append('image', imageFile);
+                res = await fetch('/api/broadcast', { method: 'POST', body: formData });
+            } else {
+                const body = { message };
+                if (imageUrl) body.image_url = imageUrl;
+                res = await fetch('/api/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            }
             const data = await res.json();
             if (res.ok) {
                 showToast(`Broadcast terkirim ke ${data.sent} pengguna (${data.failed} gagal)`, 'success');
                 closeModal('modal-broadcast');
                 document.getElementById('broadcast-text-modal').value = '';
+                document.getElementById('broadcast-image-url-modal').value = '';
+                document.getElementById('broadcast-image-file-modal').value = '';
+                document.getElementById('broadcast-preview-modal').style.display = 'none';
             } else {
-                showToast('Gagal mengirim broadcast', 'error');
+                showToast(data.error || 'Gagal mengirim broadcast', 'error');
             }
         });
 
@@ -2837,10 +2939,22 @@
             </div>
             <form id="broadcast-form-modal">
                 <div class="form-group">
-                    <label><i class="fa-solid fa-message"></i> Isi Pesan Broadcast (Support Markdown)</label>
+                    <label><i class="fa-solid fa-message"></i> Isi Pesan (Markdown, opsional jika ada gambar)</label>
                     <textarea id="broadcast-text-modal" class="form-control"
                         placeholder="📢 PROMO SPESIAL HARI INI!&#10;&#10;Dapatkan diskon 20% untuk pembelian Canva & Netflix..."
-                        required style="min-height: 180px;"></textarea>
+                        style="min-height: 120px;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-image"></i> URL Gambar (opsional)</label>
+                    <input type="url" id="broadcast-image-url-modal" class="form-control"
+                        placeholder="https://example.com/gambar.jpg">
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-upload"></i> Atau Upload Gambar (opsional)</label>
+                    <input type="file" id="broadcast-image-file-modal" class="form-control" accept="image/*">
+                </div>
+                <div id="broadcast-preview-modal" style="display:none; margin-bottom:12px; text-align:center;">
+                    <img id="broadcast-preview-img-modal" style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid var(--border-color);">
                 </div>
                 <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Kirim Broadcast
                     Sekarang</button>
