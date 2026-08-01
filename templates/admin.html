@@ -1424,10 +1424,66 @@
                     via Bot</button>
             </form>
         </div>
+    <!-- MODAL BROADCAST -->
+    <div id="modal-broadcast" class="modal">
+        <div class="modal-content" style="max-width: 550px;">
+            <div class="modal-header">
+                <span class="modal-title"><i class="fa-solid fa-paper-plane" style="color: var(--primary);"></i> Kirim
+                    Broadcast ke Semua User</span>
+                <button class="modal-close" onclick="closeModal('modal-broadcast')">&times;</button>
+            </div>
+            <form id="broadcast-form-modal">
+                <div class="form-group">
+                    <label><i class="fa-solid fa-message"></i> Isi Pesan (Markdown, opsional jika ada gambar)</label>
+                    <textarea id="broadcast-text-modal" class="form-control"
+                        placeholder="📢 PROMO SPESIAL HARI INI!&#10;&#10;Dapatkan diskon 20% untuk pembelian Canva & Netflix..."
+                        style="min-height: 120px;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-image"></i> URL Gambar (opsional)</label>
+                    <input type="url" id="broadcast-image-url-modal" class="form-control"
+                        placeholder="https://example.com/gambar.jpg">
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-upload"></i> Atau Upload Gambar (opsional)</label>
+                    <input type="file" id="broadcast-image-file-modal" class="form-control" accept="image/*">
+                </div>
+                <div id="broadcast-preview-modal" style="display:none; margin-bottom:12px; text-align:center;">
+                    <img id="broadcast-preview-img-modal" style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid var(--border-color);">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Kirim Broadcast
+                    Sekarang</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL FEEDBACK CHAT INBOX -->
+    <div id="modal-feedback-chat" class="modal">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header">
+                <span class="modal-title" id="fb-chat-title"><i class="fa-solid fa-comments" style="color: var(--primary);"></i> Thread Feedback</span>
+                <button class="modal-close" onclick="closeModal('modal-feedback-chat')">&times;</button>
+            </div>
+            <div id="fb-chat-messages" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px; background: rgba(15, 23, 42, 0.6); border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--border-color);">
+                <div style="text-align: center; color: var(--text-muted);">Memuat riwayat percakapan...</div>
+            </div>
+            <form id="form-fb-reply">
+                <input type="hidden" id="fb-chat-id">
+                <div class="form-group">
+                    <label><i class="fa-solid fa-reply"></i> Balas ke Pengguna (Pesan akan langsung terkirim di Telegram):</label>
+                    <textarea id="fb-chat-reply-input" class="form-control" placeholder="Tuliskan pesan balasan Anda..." style="min-height: 80px;" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Kirim Balasan</button>
+            </form>
+        </div>
     </div>
 
     <!-- JAVASCRIPT APP LOGIC -->
     <script>
+        // Global variables initialization
+        let salesChartInstance = null;
+        let chartAnalyticsData = null;
+        let currentChartFilter = 'jam';
         function showToast(msg, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -1439,6 +1495,23 @@
 
         function formatRupiah(num) {
             return 'Rp ' + Number(num || 0).toLocaleString('id-ID');
+        }
+
+        function getAdminToken() {
+            return localStorage.getItem('admin_token') || '';
+        }
+
+        async function authFetch(url, options = {}) {
+            options.headers = options.headers || {};
+            const token = getAdminToken();
+            if (token && !options.headers['Authorization']) {
+                if (options.headers instanceof Headers) {
+                    options.headers.set('Authorization', 'Bearer ' + token);
+                } else {
+                    options.headers['Authorization'] = 'Bearer ' + token;
+                }
+            }
+            return fetch(url, options);
         }
 
         // Auth Logic
@@ -1453,6 +1526,9 @@
                 });
                 const data = await res.json();
                 if (res.ok && data.success) {
+                    if (data.token) {
+                        localStorage.setItem('admin_token', data.token);
+                    }
                     showToast('Login berhasil!', 'success');
                     initDashboard();
                 } else {
@@ -1464,13 +1540,14 @@
         });
 
         async function logout() {
+            localStorage.removeItem('admin_token');
             await fetch('/api/auth/logout', { method: 'POST' });
             location.reload();
         }
 
         async function initDashboard() {
             try {
-                const res = await fetch('/api/auth/me');
+                const res = await authFetch('/api/auth/me');
                 if (!res.ok) {
                     document.getElementById('login-screen').style.display = 'flex';
                     document.getElementById('main-app').style.display = 'none';
@@ -2559,7 +2636,7 @@
             }
         }
 
-        document.getElementById('form-fb-reply').addEventListener('submit', async (e) => {
+        document.getElementById('form-fb-reply')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const fid = document.getElementById('fb-chat-id').value;
             const reply = document.getElementById('fb-chat-reply-input').value.trim();
@@ -2703,10 +2780,6 @@
         // =========================================================================
         // REALTIME SALES CHART ANALYTICS (Chart.js)
         // =========================================================================
-        let salesChartInstance = null;
-        let chartAnalyticsData = null;
-        let currentChartFilter = 'jam';
-
         async function initSalesChart() {
             try {
                 const res = await fetch('/api/analytics/chart');
@@ -2797,7 +2870,7 @@
         // =========================================================================
         // FLOATING BROADCAST MODAL HANDLER
         // =========================================================================
-        document.getElementById('broadcast-form-modal').addEventListener('submit', async (e) => {
+        document.getElementById('broadcast-form-modal')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const message = document.getElementById('broadcast-text-modal').value.trim();
             const imageUrl = document.getElementById('broadcast-image-url-modal').value.trim();
@@ -2845,60 +2918,6 @@
         // Init on page load
         initDashboard();
     </script>
-
-    <!-- MODAL BROADCAST -->
-    <div id="modal-broadcast" class="modal">
-        <div class="modal-content" style="max-width: 550px;">
-            <div class="modal-header">
-                <span class="modal-title"><i class="fa-solid fa-paper-plane" style="color: var(--primary);"></i> Kirim
-                    Broadcast ke Semua User</span>
-                <button class="modal-close" onclick="closeModal('modal-broadcast')">&times;</button>
-            </div>
-            <form id="broadcast-form-modal">
-                <div class="form-group">
-                    <label><i class="fa-solid fa-message"></i> Isi Pesan (Markdown, opsional jika ada gambar)</label>
-                    <textarea id="broadcast-text-modal" class="form-control"
-                        placeholder="📢 PROMO SPESIAL HARI INI!&#10;&#10;Dapatkan diskon 20% untuk pembelian Canva & Netflix..."
-                        style="min-height: 120px;"></textarea>
-                </div>
-                <div class="form-group">
-                    <label><i class="fa-solid fa-image"></i> URL Gambar (opsional)</label>
-                    <input type="url" id="broadcast-image-url-modal" class="form-control"
-                        placeholder="https://example.com/gambar.jpg">
-                </div>
-                <div class="form-group">
-                    <label><i class="fa-solid fa-upload"></i> Atau Upload Gambar (opsional)</label>
-                    <input type="file" id="broadcast-image-file-modal" class="form-control" accept="image/*">
-                </div>
-                <div id="broadcast-preview-modal" style="display:none; margin-bottom:12px; text-align:center;">
-                    <img id="broadcast-preview-img-modal" style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid var(--border-color);">
-                </div>
-                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Kirim Broadcast
-                    Sekarang</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL FEEDBACK CHAT INBOX -->
-    <div id="modal-feedback-chat" class="modal">
-        <div class="modal-content" style="max-width: 650px;">
-            <div class="modal-header">
-                <span class="modal-title" id="fb-chat-title"><i class="fa-solid fa-comments" style="color: var(--primary);"></i> Thread Feedback</span>
-                <button class="modal-close" onclick="closeModal('modal-feedback-chat')">&times;</button>
-            </div>
-            <div id="fb-chat-messages" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px; background: rgba(15, 23, 42, 0.6); border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--border-color);">
-                <div style="text-align: center; color: var(--text-muted);">Memuat riwayat percakapan...</div>
-            </div>
-            <form id="form-fb-reply">
-                <input type="hidden" id="fb-chat-id">
-                <div class="form-group">
-                    <label><i class="fa-solid fa-reply"></i> Balas ke Pengguna (Pesan akan langsung terkirim di Telegram):</label>
-                    <textarea id="fb-chat-reply-input" class="form-control" placeholder="Tuliskan pesan balasan Anda..." style="min-height: 80px;" required></textarea>
-                </div>
-                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Kirim Balasan</button>
-            </form>
-        </div>
-    </div>
 </body>
 
 </html>
