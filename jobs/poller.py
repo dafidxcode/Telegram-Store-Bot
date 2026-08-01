@@ -249,7 +249,42 @@ async def process_paid_order(bot, order_id: str) -> bool:
         except Exception as e:
             logger.warning("Failed to notify: %s", e)
 
-    return True
+async def _cleanup_expired_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clean up pending orders that have exceeded their expiration time."""
+    try:
+        expired_orders = db.get_expired_pending_orders()
+    except Exception as e:
+        logger.warning("Failed to fetch expired orders: %s", e)
+        return
+
+    bot = context.bot
+    for order in expired_orders:
+        order_id = order["id"]
+        user_id = order["user_id"]
+        user_lang = db.get_user_lang(user_id)
+
+        db.update_order_status(order_id, "cancelled")
+        released = db.release_stock(order_id)
+        logger.info("Order %s EXPIRED locally, cancelled & released %d stock", order_id, released)
+
+        qris_msg_id = order.get("qris_message_id")
+        if qris_msg_id:
+            try:
+                await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
+            except Exception:
+                pass
+
+        try:
+            user = await bot.get_chat(user_id)
+            text = build_home_text(user, user_lang)
+            await bot.send_message(
+                chat_id=user_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu_keyboard(user_id, user_lang),
+            )
+        except Exception:
+            pass
 
 
 async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
