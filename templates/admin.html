@@ -590,12 +590,13 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.75);
             backdrop-filter: blur(5px);
             z-index: 999;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            overflow-y: auto;
         }
 
         .modal.active {
@@ -608,8 +609,24 @@
             border-radius: var(--radius-lg);
             width: 100%;
             max-width: 540px;
-            padding: 28px;
+            max-height: 88vh;
+            overflow-y: auto;
+            padding: 24px;
             box-shadow: var(--shadow-card);
+            margin: auto;
+        }
+
+        .modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .modal-content::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .modal-content::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
         }
 
         .modal-header {
@@ -1653,11 +1670,13 @@
             const tbody = document.getElementById('products-table-body');
             tbody.innerHTML = '';
 
+            window.productsCache = {};
             const products = data.products || [];
             if (products.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Tidak ada produk ditemukan.</td></tr>';
             } else {
                 products.forEach((p, idx) => {
+                    window.productsCache[p.id] = p;
                     const tr = document.createElement('tr');
                     const badge = p.is_active ? 'badge-success' : 'badge-danger';
                     let stockBadge = `<span class="badge badge-info">${p.stock_count}</span>`;
@@ -1679,7 +1698,7 @@
                             <div style="display:flex; gap:4px; align-items:center;">
                                 <button class="btn btn-sm btn-outline" style="padding:4px 8px;" onclick="reorderProduct(${p.id}, 'up')" ${isFirst ? 'disabled style="opacity:0.35; cursor:not-allowed;"' : ''} title="Naikkan Urutan">⬆️</button>
                                 <button class="btn btn-sm btn-outline" style="padding:4px 8px;" onclick="reorderProduct(${p.id}, 'down')" ${isLast ? 'disabled style="opacity:0.35; cursor:not-allowed;"' : ''} title="Turunkan Urutan">⬇️</button>
-                                <button class="btn btn-sm btn-outline" onclick='openEditProductModal(${JSON.stringify(p)})'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+                                <button class="btn btn-sm btn-outline" onclick="openEditProductModalById(${p.id})"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
                                 <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})"><i class="fa-solid fa-trash"></i></button>
                             </div>
                         </td>
@@ -1744,11 +1763,12 @@
             const price = document.getElementById('add-p-price').value;
             const stock_type = document.getElementById('add-p-stock-type').value;
             const description = document.getElementById('add-p-desc').value.trim();
+            const instruction = document.getElementById('add-p-instruction').value.trim();
 
-            const res = await fetch('/api/products/add', {
+            const res = await authFetch('/api/products/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, price, stock_type, description })
+                body: JSON.stringify({ name, price, stock_type, description, instruction })
             });
             if (res.ok) {
                 showToast('Produk baru berhasil disimpan!', 'success');
@@ -1757,12 +1777,20 @@
             }
         });
 
+        function openEditProductModalById(pid) {
+            const p = window.productsCache ? window.productsCache[pid] : null;
+            if (p) {
+                openEditProductModal(p);
+            }
+        }
+
         function openEditProductModal(p) {
             document.getElementById('edit-p-id').value = p.id;
             document.getElementById('edit-p-name').value = p.name;
             document.getElementById('edit-p-price').value = p.price;
             document.getElementById('edit-p-stock-type').value = p.stock_type || 'limited';
             document.getElementById('edit-p-desc').value = p.description || '';
+            document.getElementById('edit-p-instruction').value = p.instruction || '';
             document.getElementById('edit-p-status').value = p.is_active ? 1 : 0;
             document.getElementById('modal-edit-product').classList.add('active');
         }
@@ -1774,12 +1802,13 @@
             const price = document.getElementById('edit-p-price').value;
             const stock_type = document.getElementById('edit-p-stock-type').value;
             const description = document.getElementById('edit-p-desc').value.trim();
+            const instruction = document.getElementById('edit-p-instruction').value.trim();
             const is_active = document.getElementById('edit-p-status').value;
 
-            const res = await fetch(`/api/products/${pid}/update`, {
+            const res = await authFetch(`/api/products/${pid}/update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, price, stock_type, description, is_active })
+                body: JSON.stringify({ name, price, stock_type, description, instruction, is_active })
             });
             if (res.ok) {
                 showToast('Produk berhasil diperbarui!', 'success');
