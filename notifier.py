@@ -94,3 +94,41 @@ async def send_channel_purchase_notif(bot: Bot, order: dict, product_name: str =
             )
         else:
             logger.exception("Failed to send channel purchase notification for order %s: %s", order.get("id"), e)
+
+
+async def send_admin_feedback_notif(bot: Bot, feedback_id: int, user_name: str, message_text: str) -> None:
+    """Send immediate notification to Telegram Admin when a new feedback/reply arrives."""
+    admin_targets = set()
+    if config.ADMIN_USER_ID:
+        admin_targets.add(config.ADMIN_USER_ID)
+    if config.ADMIN_IDS:
+        admin_targets.update(config.ADMIN_IDS)
+
+    if not admin_targets:
+        return
+
+    text = (
+        f"💬 *FEEDBACK / KRITIK SARAN BARU!*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 *Thread:* `#FB-{feedback_id}`\n"
+        f"👤 *Pengguna:* {escape_md(user_name)}\n"
+        f"📝 *Pesan:*\n"
+        f"_{escape_md(message_text)}_\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💬 Balas Feedback", callback_data=f"admin_reply_fb:{feedback_id}")]
+    ])
+
+    for admin_id in admin_targets:
+        try:
+            await bot.send_message(
+                chat_id=admin_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=reply_markup,
+            )
+            logger.info("Feedback notif #FB-%d sent to admin %s", feedback_id, admin_id)
+        except Exception as e:
+            logger.warning("Failed to send feedback notif #FB-%d to admin %s: %s", feedback_id, admin_id, e)

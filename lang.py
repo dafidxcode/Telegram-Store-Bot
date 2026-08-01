@@ -371,7 +371,6 @@ T = {
     "purchase_detail_status": {"en": "📊 Status", "id": "📊 Status"},
     "purchase_detail_date":   {"en": "📅 Date", "id": "📅 Tanggal"},
     "purchase_detail_accounts": {"en": "🔐 Accounts Delivered", "id": "🔐 Akun Diterima"},
-    "purchase_detail_voucher": {"en": "🎟️ Voucher Used", "id": "🎟️ Voucher Digunakan"},
     "purchase_detail_discount": {"en": "💸 Discount", "id": "💸 Diskon"},
     "no_purchase_details":    {"en": "❌ No purchase details available.", "id": "❌ Detail pembelian belum tersedia."},
     "btn_download_again":     {"en": "📥 Download Again", "id": "📥 Download Ulang"},

@@ -45,7 +45,6 @@ logger = logging.getLogger(__name__)
 
 JUMLAH = 0
 KONFIRMASI = 1
-VOUCHER_INPUT = 2
 
 
 async def _create_order_and_pay(context, user, product, quantity, query=None, message=None, *args, **kwargs):
@@ -62,7 +61,7 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
             order_id, user.id, user.username, user.first_name,
             quantity, total, product_id=product["id"],
             qris_nominal=qris_nominal, expires_at=expires_at,
-            original_total=total, voucher_code="",
+            original_total=total,
         )
     except Exception as exc:
         logger.exception("Failed to create order: %s", exc)
@@ -232,8 +231,6 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     context.user_data.pop("qty", None)
     context.user_data.pop("state", None)
     context.user_data.pop("admin_state", None)
-    context.user_data.pop("voucher_code", None)
-    context.user_data.pop("voucher_discount", None)
     return order_id, sent_msg
 
 
@@ -322,8 +319,6 @@ async def handle_cancel_btn(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data.pop("qty", None)
     context.user_data.pop("state", None)
     context.user_data.pop("admin_state", None)
-    context.user_data.pop("voucher_code", None)
-    context.user_data.pop("voucher_discount", None)
     if query:
         try:
             await query.edit_message_text(

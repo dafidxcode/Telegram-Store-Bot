@@ -553,118 +553,27 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         reply_text = message.text.strip()
         feedback_id = context.user_data.pop("feedback_reply_id", None)
         context.user_data.pop("admin_state", None)
+        admin_id = update.effective_user.id if update.effective_user else 0
         if feedback_id:
-            fb = db.get_all_feedback()
-            fb_item = next((f for f in fb if f["id"] == feedback_id), None)
+            fb_item = db.get_feedback(feedback_id)
             if fb_item:
-                db.reply_feedback(feedback_id, reply_text)
+                db.reply_feedback(feedback_id, reply_text, admin_id=admin_id)
                 try:
                     await context.bot.send_message(
                         chat_id=fb_item["user_id"],
-                        text=t("feedback_reply_to_user", lang, reply=reply_text),
+                        text=f"💬 *BALASAN ADMIN (Feedback #{feedback_id})*\n━━━━━━━━━━━━━━━━━━━━━━━━\n{reply_text}\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 *Anda dapat membalas pesan ini untuk merespon kembali ke Admin.*",
                         parse_mode=ParseMode.MARKDOWN,
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to deliver feedback reply to user %s: %s", fb_item["user_id"], e)
             await message.reply_text(
-                t("feedback_reply_sent", lang),
+                f"✅ *Balasan untuk Feedback #{feedback_id} telah terkirim!*",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=_admin_back_keyboard(lang, back_data="admin:feedbacklist"),
             )
         return
 
-    if admin_state == "addvoucher":
-        message = update.message
-        if message is None or not message.text:
-            return
-        voucher_data = context.user_data.pop("addvoucher_data", {})
-        code = message.text.strip().upper()
-        if not code or len(code) < 3:
-            await message.reply_text("Kode voucher minimal 3 karakter. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
-            context.user_data["admin_state"] = "addvoucher"
-            return
-        existing = db.get_voucher(code)
-        if existing:
-            await message.reply_text(f"Kode voucher *{code}* sudah ada. Kirim kode lain:", parse_mode=ParseMode.MARKDOWN, reply_markup=_admin_back_keyboard(lang))
-            context.user_data["admin_state"] = "addvoucher"
-            return
-        voucher_data["code"] = code
-        context.user_data["admin_state"] = "addvoucher_value"
-        context.user_data["addvoucher_data"] = voucher_data
-        dtype = voucher_data.get("discount_type", "fixed")
-        dtype_label = "Nominal Tetap (Rp)" if dtype == "fixed" else "Persentase (%)"
-        await message.reply_text(
-            f"Kode: *{code}*\nTipe: *{dtype_label}*\n\nMasukkan nilai diskon:",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(lang),
-        )
-        return
 
-    if admin_state == "addvoucher_value":
-        message = update.message
-        if message is None or not message.text:
-            return
-        try:
-            value = int(message.text.strip().replace(".", "").replace(",", ""))
-        except ValueError:
-            await message.reply_text("Nilai harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
-            return
-        voucher_data = context.user_data.pop("addvoucher_data", {})
-        voucher_data["discount_value"] = value
-        context.user_data["admin_state"] = "addvoucher_min"
-        context.user_data["addvoucher_data"] = voucher_data
-        await message.reply_text(
-            f"Nilai diskon: *{value}*{'%' if voucher_data.get('discount_type') == 'percent' else ''}\n\nMasukkan minimal pembelian (0 = tanpa minimal):",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(lang),
-        )
-        return
-
-    if admin_state == "addvoucher_min":
-        message = update.message
-        if message is None or not message.text:
-            return
-        try:
-            min_purchase = int(message.text.strip().replace(".", "").replace(",", ""))
-        except ValueError:
-            await message.reply_text("Harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
-            return
-        voucher_data = context.user_data.pop("addvoucher_data", {})
-        voucher_data["min_purchase"] = min_purchase
-        context.user_data["admin_state"] = "addvoucher_max"
-        context.user_data["addvoucher_data"] = voucher_data
-        await message.reply_text(
-            "Masukkan maksimal penggunaan (0 = unlimited):",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(lang),
-        )
-        return
-
-    if admin_state == "addvoucher_max":
-        message = update.message
-        if message is None or not message.text:
-            return
-        try:
-            max_uses = int(message.text.strip())
-        except ValueError:
-            await message.reply_text("Harus angka. Kirim ulang:", reply_markup=_admin_back_keyboard(lang))
-            return
-        voucher_data = context.user_data.pop("addvoucher_data", {})
-        code = voucher_data["code"]
-        db.create_voucher(
-            code=code,
-            discount_type=voucher_data.get("discount_type", "fixed"),
-            discount_value=voucher_data["discount_value"],
-            min_purchase=voucher_data.get("min_purchase", 0),
-            max_uses=max_uses,
-        )
-        context.user_data.pop("admin_state", None)
-        await message.reply_text(
-            t("admin_voucher_added", lang, code=code),
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=_admin_back_keyboard(lang, back_data="admin:vouchers"),
-        )
-        return
 
     if admin_state == "user_ban_reason":
         message = update.message
@@ -1014,6 +923,60 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception as e:
         logger.exception("Failed to download file: %s", e)
         await message.reply_text(t("admin_failed_read", lang), reply_markup=_admin_back_keyboard(lang))
+        return
+
+    admin_state = context.user_data.get("admin_state")
+    if admin_state and admin_state.startswith("preorder_fulfill:"):
+        delivered_content = text.strip()
+        order_id = admin_state.split(":")[1]
+        context.user_data.pop("admin_state", None)
+
+        order = db.get_order(order_id)
+        if not order:
+            await message.reply_text("❌ Pesanan tidak ditemukan.", reply_markup=_admin_back_keyboard(lang))
+            return
+
+        product = db.get_product(order.get("product_id", 1))
+        product_name = product["name"] if product else "N/A"
+        u_id = order["user_id"]
+        user_lang = db.get_user_lang(u_id)
+
+        db.save_purchase_detail(
+            order_id=order_id,
+            user_id=u_id,
+            product_name=product_name,
+            accounts_delivered=delivered_content,
+        )
+        db.update_order_status(order_id, "delivered")
+
+        buyer_text = (
+            f"🎉 *PESANAN PRE-ORDER SELESAI!*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 Pesanan: `#{order_id}`\n"
+            f"📦 Produk: *{escape_md(product_name)}*\n"
+            f"🔢 Jumlah: {order['quantity']} akun\n"
+            f"💰 Total: *Rp {format_rupiah(order['total'])}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔐 *Data Produk / Akun Anda:*\n"
+            f"```\n{delivered_content}\n```\n\n"
+            f"Terima kasih telah berbelanja! 🙏"
+        )
+        try:
+            from handlers.start import get_main_menu_keyboard
+            await context.bot.send_message(
+                chat_id=u_id,
+                text=buyer_text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu_keyboard(u_id, user_lang),
+            )
+        except Exception as e:
+            logger.warning("Failed to send delivered preorder to user %s: %s", u_id, e)
+
+        await message.reply_text(
+            f"✅ *Produk Pre-Order #{order_id} berhasil dikirimkan ke pengguna!*",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_admin_back_keyboard(lang),
+        )
         return
 
     addstock_pid = context.user_data.get("addstock_product_id")

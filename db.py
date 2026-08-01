@@ -19,11 +19,28 @@ CREATE TABLE IF NOT EXISTS products (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   description TEXT DEFAULT '',
+  instruction TEXT DEFAULT '',
   price INTEGER NOT NULL DEFAULT 0,
   stock_type TEXT DEFAULT 'limited',
   stock_count INTEGER DEFAULT 0,
   duration TEXT DEFAULT '',
   is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS feedback_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  feedback_id INTEGER NOT NULL,
+  sender TEXT NOT NULL,
+  sender_id INTEGER DEFAULT 0,
+  message TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -48,7 +65,6 @@ CREATE TABLE IF NOT EXISTS orders (
   quantity INTEGER NOT NULL,
   total INTEGER NOT NULL,
   original_total INTEGER DEFAULT 0,
-  voucher_code TEXT DEFAULT '',
   qris_nominal INTEGER DEFAULT 0,
   status TEXT DEFAULT 'pending',
   qris_ref TEXT,
@@ -76,30 +92,6 @@ CREATE TABLE IF NOT EXISTS referrals (
   reward_granted INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
-
-CREATE TABLE IF NOT EXISTS vouchers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  code TEXT NOT NULL UNIQUE,
-  discount_type TEXT DEFAULT 'fixed',
-  discount_value INTEGER NOT NULL DEFAULT 0,
-  min_purchase INTEGER DEFAULT 0,
-  max_uses INTEGER DEFAULT 0,
-  used_count INTEGER DEFAULT 0,
-  product_id INTEGER DEFAULT 0,
-  is_active INTEGER DEFAULT 1,
-  expires_at TEXT DEFAULT '',
-  created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS voucher_usages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  voucher_id INTEGER NOT NULL,
-  user_id INTEGER NOT NULL,
-  order_id TEXT DEFAULT '',
-  discount_amount INTEGER DEFAULT 0,
-  used_at TEXT DEFAULT (datetime('now'))
-);
-
 CREATE TABLE IF NOT EXISTS feedback (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -153,7 +145,6 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_email_product ON stock(email, product_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
 """
 
 
@@ -227,24 +218,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "ban_reason" not in cols:
         conn.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT ''")
 
-    cursor = conn.execute("PRAGMA table_info(orders)")
+    cursor = conn.execute("PRAGMA table_info(products)")
     cols = {row["name"] for row in cursor.fetchall()}
-    if "original_total" not in cols:
-        conn.execute("ALTER TABLE orders ADD COLUMN original_total INTEGER DEFAULT 0")
-    if "voucher_code" not in cols:
-        conn.execute("ALTER TABLE orders ADD COLUMN voucher_code TEXT DEFAULT ''")
+    if "instruction" not in cols:
+        conn.execute("ALTER TABLE products ADD COLUMN instruction TEXT DEFAULT ''")
 
-    for tbl in ("referrals", "vouchers", "voucher_usages", "feedback", "purchase_details", "referral_commissions", "withdrawal_requests", "bot_settings"):
+    for tbl in ("referrals", "feedback", "purchase_details", "referral_commissions", "withdrawal_requests", "bot_settings", "admin_sessions", "feedback_messages"):
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {tbl} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT
             )
         """)
-
-    try:
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code)")
-    except Exception:
-        pass
 
     conn.commit()
 
@@ -254,6 +238,8 @@ def init_db(path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     _conn = sqlite3.connect(str(path), check_same_thread=False)
     _conn.row_factory = sqlite3.Row
+    _conn.execute("PRAGMA journal_mode=WAL;")
+    _conn.execute("PRAGMA busy_timeout=5000;")
     _conn.executescript(_SCHEMA_SQL)
     _migrate(_conn)
     _conn.commit()
@@ -269,12 +255,12 @@ def init_db(path: str) -> None:
 # ---------------------------------------------------------------------------
 
 def add_product(name: str, description: str, price: int, stock_type: str = "limited",
-                stock_count: int = 0, duration: str = "") -> int:
+                stock_count: int = 0, duration: str = "", instruction: str = "") -> int:
     assert _conn is not None
     cur = _conn.execute(
-        """INSERT INTO products (name, description, price, stock_type, stock_count, duration)
-        VALUES (?, ?, ?, ?, ?, ?)""",
-        (name, description, price, stock_type, stock_count, duration),
+        """INSERT INTO products (name, description, instruction, price, stock_type, stock_count, duration)
+        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (name, description, instruction, price, stock_type, stock_count, duration),
     )
     _conn.commit()
     return cur.lastrowid
@@ -300,7 +286,7 @@ def get_all_products() -> list[dict]:
 
 def update_product(product_id: int, **kwargs) -> bool:
     assert _conn is not None
-    allowed = {"name", "description", "price", "stock_type", "stock_count", "duration", "is_active"}
+    allowed = {"name", "description", "instruction", "price", "stock_type", "stock_count", "duration", "is_active"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return False
@@ -322,7 +308,7 @@ def swap_products(id1: int, id2: int) -> bool:
 
         temp_id = -9999
 
-        for tbl in ["stock", "orders", "vouchers"]:
+        for tbl in ["stock", "orders"]:
             try:
                 _conn.execute(f"UPDATE {tbl} SET product_id = ? WHERE product_id = ?", (temp_id, id1))
                 _conn.execute(f"UPDATE {tbl} SET product_id = ? WHERE product_id = ?", (id1, id2))
@@ -352,7 +338,7 @@ def delete_product(product_id: int) -> bool:
 
 
 def renumber_products() -> bool:
-    """Renumber all existing products sequentially (1, 2, 3...) and update foreign keys in stock, orders, vouchers."""
+    """Renumber all existing products sequentially (1, 2, 3...) and update foreign keys in stock, orders."""
     assert _conn is not None
     try:
         rows = _conn.execute("SELECT id FROM products ORDER BY id ASC").fetchall()
@@ -374,7 +360,6 @@ def renumber_products() -> bool:
             if old_id != idx:
                 _conn.execute("UPDATE stock SET product_id = ? WHERE product_id = ?", (temp_id, old_id))
                 _conn.execute("UPDATE orders SET product_id = ? WHERE product_id = ?", (temp_id, old_id))
-                _conn.execute("UPDATE vouchers SET product_id = ? WHERE product_id = ?", (temp_id, old_id))
                 _conn.execute("UPDATE products SET id = ? WHERE id = ?", (temp_id, old_id))
 
         # Step 2: Map temporary negative ID (-idx) to target positive ID (idx)
@@ -383,7 +368,6 @@ def renumber_products() -> bool:
             new_id = idx
             _conn.execute("UPDATE stock SET product_id = ? WHERE product_id = ?", (new_id, temp_id))
             _conn.execute("UPDATE orders SET product_id = ? WHERE product_id = ?", (new_id, temp_id))
-            _conn.execute("UPDATE vouchers SET product_id = ? WHERE product_id = ?", (new_id, temp_id))
             _conn.execute("UPDATE products SET id = ? WHERE id = ?", (new_id, temp_id))
 
         # Step 3: Reset autoincrement sequence
@@ -634,13 +618,12 @@ def create_order(
     qris_nominal: int = 0,
     expires_at: str = "",
     original_total: int = 0,
-    voucher_code: str = "",
 ) -> None:
     assert _conn is not None
     _conn.execute(
-        """INSERT INTO orders (id, product_id, user_id, username, first_name, quantity, total, original_total, voucher_code, qris_nominal, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (order_id, product_id, user_id, username, first_name, quantity, total, original_total, voucher_code, qris_nominal, expires_at),
+        """INSERT INTO orders (id, product_id, user_id, username, first_name, quantity, total, original_total, qris_nominal, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (order_id, product_id, user_id, username, first_name, quantity, total, original_total, qris_nominal, expires_at),
     )
     _conn.commit()
 
@@ -972,141 +955,121 @@ def get_referral_list(user_id: int) -> list[dict]:
     ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
-
 # ---------------------------------------------------------------------------
-# Vouchers
+# Admin Sessions (Persistent 30 days)
 # ---------------------------------------------------------------------------
 
-def create_voucher(code: str, discount_type: str, discount_value: int,
-                   min_purchase: int = 0, max_uses: int = 0,
-                   product_id: int = 0, expires_at: str = "") -> int:
+def create_admin_session(token: str, user_id: int, duration_days: int = 30) -> str:
     assert _conn is not None
-    cur = _conn.execute(
-        """INSERT INTO vouchers (code, discount_type, discount_value, min_purchase, max_uses, product_id, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (code.upper(), discount_type, discount_value, min_purchase, max_uses, product_id, expires_at),
+    _conn.execute(
+        "INSERT INTO admin_sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', ?)) "
+        "ON CONFLICT(token) DO UPDATE SET expires_at = excluded.expires_at",
+        (token, user_id, f"+{duration_days} days"),
     )
     _conn.commit()
-    return cur.lastrowid
+    return token
 
 
-def get_voucher(code: str) -> dict | None:
-    assert _conn is not None
-    row = _conn.execute("SELECT * FROM vouchers WHERE code = ?", (code.upper(),)).fetchone()
-    return _row_to_dict(row)
-
-
-def get_all_vouchers() -> list[dict]:
-    assert _conn is not None
-    rows = _conn.execute("SELECT * FROM vouchers ORDER BY id DESC").fetchall()
-    return [_row_to_dict(r) for r in rows]
-
-
-def validate_voucher(code: str, user_id: int, total: int, product_id: int = 0) -> tuple[bool, str, int]:
-    """Validate voucher and return (valid, message, discount_amount)."""
-    voucher = get_voucher(code)
-    if not voucher:
-        return False, "Voucher tidak ditemukan.", 0
-    if not voucher["is_active"]:
-        return False, "Voucher sudah tidak aktif.", 0
-    if voucher["expires_at"]:
-        from datetime import datetime
-        try:
-            exp = datetime.strptime(voucher["expires_at"], "%Y-%m-%d %H:%M:%S")
-            if datetime.now() > exp:
-                return False, "Voucher sudah kadaluarsa.", 0
-        except Exception:
-            pass
-    if voucher["max_uses"] > 0 and voucher["used_count"] >= voucher["max_uses"]:
-        return False, "Voucher sudah mencapai batas penggunaan.", 0
-    if voucher["min_purchase"] > 0 and total < voucher["min_purchase"]:
-        return False, f"Minimal pembelian Rp {voucher['min_purchase']:,}.", 0
-    if voucher["product_id"] > 0 and product_id != voucher["product_id"]:
-        return False, "Voucher tidak berlaku untuk produk ini.", 0
-
+def validate_admin_session(token: str) -> int | None:
     assert _conn is not None
     row = _conn.execute(
-        "SELECT COUNT(*) as cnt FROM voucher_usages WHERE voucher_id = ? AND user_id = ?",
-        (voucher["id"], user_id),
+        "SELECT user_id FROM admin_sessions WHERE token = ? AND expires_at > datetime('now')",
+        (token,),
     ).fetchone()
-    if row and row["cnt"] > 0:
-        return False, "Anda sudah menggunakan voucher ini.", 0
-
-    if voucher["discount_type"] == "percent":
-        discount = int(total * voucher["discount_value"] / 100)
-    else:
-        discount = min(voucher["discount_value"], total)
-
-    return True, "Voucher valid.", discount
+    return row["user_id"] if row else None
 
 
-def use_voucher(voucher_id: int, user_id: int, order_id: str, discount_amount: int) -> None:
+def delete_admin_session(token: str) -> None:
     assert _conn is not None
-    _conn.execute(
-        "INSERT INTO voucher_usages (voucher_id, user_id, order_id, discount_amount) VALUES (?, ?, ?, ?)",
-        (voucher_id, user_id, order_id, discount_amount),
-    )
-    _conn.execute(
-        "UPDATE vouchers SET used_count = used_count + 1 WHERE id = ?",
-        (voucher_id,),
-    )
+    _conn.execute("DELETE FROM admin_sessions WHERE token = ?", (token,))
     _conn.commit()
-
-
-def delete_voucher(voucher_id: int) -> bool:
-    assert _conn is not None
-    cur = _conn.execute("DELETE FROM vouchers WHERE id = ?", (voucher_id,))
-    _conn.commit()
-    return cur.rowcount > 0
-
-
-def toggle_voucher(voucher_id: int) -> bool:
-    assert _conn is not None
-    cur = _conn.execute(
-        "UPDATE vouchers SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?",
-        (voucher_id,),
-    )
-    _conn.commit()
-    return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------
-# Feedback / Kritik Saran
+# Feedback / Kritik Saran (Multi-Turn Thread Inbox)
 # ---------------------------------------------------------------------------
 
 def add_feedback(user_id: int, username: str, category: str, message: str) -> int:
     assert _conn is not None
+    existing = get_user_active_feedback(user_id)
+    if existing:
+        fb_id = existing["id"]
+        add_feedback_message(fb_id, "user", user_id, message)
+        return fb_id
+
     cur = _conn.execute(
-        "INSERT INTO feedback (user_id, username, category, message) VALUES (?, ?, ?, ?)",
+        "INSERT INTO feedback (user_id, username, category, message, status) VALUES (?, ?, ?, ?, 'open')",
         (user_id, username, category, message),
     )
+    fb_id = cur.lastrowid
+    add_feedback_message(fb_id, "user", user_id, message)
+    _conn.commit()
+    return fb_id
+
+
+def get_user_active_feedback(user_id: int) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute(
+        "SELECT * FROM feedback WHERE user_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    return _row_to_dict(row)
+
+
+def get_feedback(feedback_id: int) -> dict | None:
+    assert _conn is not None
+    row = _conn.execute("SELECT * FROM feedback WHERE id = ?", (feedback_id,)).fetchone()
+    return _row_to_dict(row)
+
+
+def add_feedback_message(feedback_id: int, sender: str, sender_id: int, message: str) -> int:
+    assert _conn is not None
+    cur = _conn.execute(
+        "INSERT INTO feedback_messages (feedback_id, sender, sender_id, message) VALUES (?, ?, ?, ?)",
+        (feedback_id, sender, sender_id, message),
+    )
+    if sender == "admin":
+        _conn.execute(
+            "UPDATE feedback SET admin_reply = ?, status = 'replied', replied_at = datetime('now') WHERE id = ?",
+            (message, feedback_id),
+        )
+    else:
+        _conn.execute(
+            "UPDATE feedback SET message = ?, status = 'open' WHERE id = ?",
+            (message, feedback_id),
+        )
     _conn.commit()
     return cur.lastrowid
+
+
+def get_feedback_messages(feedback_id: int) -> list[dict]:
+    assert _conn is not None
+    rows = _conn.execute(
+        "SELECT * FROM feedback_messages WHERE feedback_id = ? ORDER BY id ASC",
+        (feedback_id,),
+    ).fetchall()
+    return [_row_to_dict(r) for r in rows]
 
 
 def get_all_feedback(status: str | None = None, limit: int = 50) -> list[dict]:
     assert _conn is not None
     if status:
         rows = _conn.execute(
-            "SELECT * FROM feedback WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            "SELECT * FROM feedback WHERE status = ? ORDER BY id DESC LIMIT ?",
             (status, limit),
         ).fetchall()
     else:
         rows = _conn.execute(
-            "SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?",
+            "SELECT * FROM feedback ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
-def reply_feedback(feedback_id: int, admin_reply: str) -> bool:
+def reply_feedback(feedback_id: int, admin_reply: str, admin_id: int = 0) -> bool:
     assert _conn is not None
-    cur = _conn.execute(
-        "UPDATE feedback SET admin_reply = ?, status = 'replied', replied_at = datetime('now') WHERE id = ?",
-        (admin_reply, feedback_id),
-    )
-    _conn.commit()
-    return cur.rowcount > 0
+    add_feedback_message(feedback_id, "admin", admin_id, admin_reply)
+    return True
 
 
 def close_feedback(feedback_id: int) -> bool:

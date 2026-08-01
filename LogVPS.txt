@@ -1,0 +1,660 @@
+INFO:     10.0.1.2:52862 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 401 Unauthorized
+INFO:     10.0.1.2:52862 - "GET /api/dashboard HTTP/1.1" 401 Unauthorized
+INFO:     10.0.1.2:37196 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 401 Unauthorized
+INFO:     10.0.1.2:37196 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "GET /api/dashboard HTTP/1.1" 200 OK
+2026-07-30 05:33:30,852 __main__ INFO Database siap: /app/data/bot.db
+2026-07-30 05:33:30,852 __main__ INFO Bot: @Viintools | Admin: 7166019192
+2026-07-30 05:33:30,852 __main__ INFO Admin IDs: {7166019192}
+2026-07-30 05:33:30,852 payments.klikqris INFO KlikQRIS initialized — mode: production, base: https://klikqris.com/api, callback: https://keok69.biz.id/webhook/klikqris
+2026-07-30 05:33:30,852 __main__ INFO KlikQRIS: aktif (mode production, PG KlikQRIS)
+2026-07-30 05:33:31,022 __main__ INFO QRIS poller aktif (interval 10s)
+2026-07-30 05:33:31,022 __main__ INFO Starting bot + webhook server...
+2026-07-30 05:33:31,226 __main__ INFO Starting webhook server on port 8080
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+2026-07-30 05:33:31,236 webhook INFO Dashboard DB initialized at /app/data/bot.db
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-30 05:33:32,027 telegram.ext.Application INFO Application started
+2026-07-30 05:34:16,756 payments.klikqris INFO Create QRIS: ORD-20260730053416-8397 amount=75000 mode=production
+2026-07-30 05:34:17,353 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 05:34:17,353 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 05:34:17,357 handlers.buy INFO QRIS created for ORD-20260730053416-8397 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 05:34:17,697 handlers.buy INFO Sending QRIS photo (b64 len=3032, file name=qris_ORD-20260730053416-8397.png)
+2026-07-30 05:34:18,648 handlers.buy INFO QRIS base64 image sent for ORD-20260730053416-8397, msg_id=1080
+INFO:     10.0.1.2:37196 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "POST /api/orders/ORD-20260730053416-8397/approve HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37196 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44368 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38302 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38302 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38302 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38302 - "POST /api/orders/ORD-20260730054447-F8D0/approve HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38302 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38314 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38314 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38302 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49608 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49608 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49608 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54696 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:50394 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:56158 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56158 - "GET /assets/viintools_bot.png HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56162 - "GET /assets/landscape.png HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56158 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56158 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56158 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56158 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56162 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56162 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56162 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56162 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35778 - "POST /api/products/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35778 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53916 - "POST /api/products/7/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53916 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:42200 - "POST /api/products/7/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:42200 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54460 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:33638 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33638 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:33638 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:33638 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33638 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33638 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33638 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33648 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33648 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44024 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44024 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44024 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33624 - "POST /api/products/7/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33624 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:58756 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41794 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41794 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:41794 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:51170 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51170 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51170 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51170 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51170 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51170 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:52522 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57960 - "POST /api/products/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57960 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41238 - "POST /api/products/9/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41238 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43706 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43706 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:52270 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:52270 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:52270 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:32870 - "DELETE /api/stock/items/1013 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:32870 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57052 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35790 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35790 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35790 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44674 - "DELETE /api/stock/items/1018 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44674 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44674 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44674 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:44674 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60134 - "DELETE /api/stock/items/1023 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60134 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:39742 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:39742 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39742 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53854 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53854 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53854 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53854 - "DELETE /api/stock/items/1028 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53854 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49182 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49182 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49182 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57140 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57140 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:57140 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37610 - "DELETE /api/stock/items/1033 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37610 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54820 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54820 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54820 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54820 - "DELETE /api/stock/items/1039 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54820 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37532 - "POST /api/stock/add HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37532 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37532 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50940 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50940 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:50940 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:50940 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50940 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50940 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50940 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50946 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59380 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:34714 - "POST /api/products/2/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:34714 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41868 - "POST /api/products/3/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41868 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41918 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41720 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:48062 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48062 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:48062 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:48062 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48062 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48062 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48062 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48062 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48062 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60898 - "POST /api/orders/ORD-20260730120223-5619/approve HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60898 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60914 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60914 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60898 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48926 - "GET /robots.txt HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:45612 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:46744 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:44214 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:59988 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59988 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:59988 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:59988 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59988 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59988 - "GET /api/dashboard HTTP/1.1" 200 OK
+2026-07-30 05:35:32,361 notifier INFO Sent purchase notification for order ORD-20260730053416-8397 to channel -1004427476664
+2026-07-30 05:44:47,431 payments.klikqris INFO Create QRIS: ORD-20260730054447-F8D0 amount=75000 mode=production
+2026-07-30 05:44:47,985 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 05:44:47,986 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 05:44:47,989 handlers.buy INFO QRIS created for ORD-20260730054447-F8D0 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 05:44:48,334 handlers.buy INFO Sending QRIS photo (b64 len=3095, file name=qris_ORD-20260730054447-F8D0.png)
+2026-07-30 05:44:49,278 handlers.buy INFO QRIS base64 image sent for ORD-20260730054447-F8D0, msg_id=1082
+2026-07-30 05:44:58,274 notifier INFO Sent purchase notification for order ORD-20260730054447-F8D0 to channel -1004427476664
+2026-07-30 07:20:25,741 payments.klikqris INFO Create QRIS: ORD-20260730072025-AF1B amount=5000 mode=production
+2026-07-30 07:20:26,269 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 07:20:26,269 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 07:20:26,289 handlers.buy INFO QRIS created for ORD-20260730072025-AF1B — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 07:20:26,634 handlers.buy INFO Sending QRIS photo (b64 len=3078, file name=qris_ORD-20260730072025-AF1B.png)
+2026-07-30 07:20:27,575 handlers.buy INFO QRIS base64 image sent for ORD-20260730072025-AF1B, msg_id=1089
+2026-07-30 07:22:01,309 jobs.poller INFO Order ORD-20260730072025-AF1B marked PAID via poller
+2026-07-30 07:22:02,856 jobs.poller WARNING Failed to send preorder admin notif: Can't parse entities: can't find end of the entity starting at byte offset 163
+2026-07-30 11:35:59,274 payments.klikqris INFO Create QRIS: ORD-20260730113559-A108 amount=60000 mode=production
+2026-07-30 11:36:00,680 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 11:36:00,681 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 11:36:00,686 handlers.buy INFO QRIS created for ORD-20260730113559-A108 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 11:36:00,863 handlers.buy INFO Sending QRIS photo (b64 len=3069, file name=qris_ORD-20260730113559-A108.png)
+2026-07-30 11:36:01,804 handlers.buy INFO QRIS base64 image sent for ORD-20260730113559-A108, msg_id=1157
+2026-07-30 11:36:45,148 handlers.buy INFO Order ORD-20260730113559-A108 cancelled by user via Cancel button
+2026-07-30 12:02:23,345 payments.klikqris INFO Create QRIS: ORD-20260730120223-5619 amount=60000 mode=production
+2026-07-30 12:02:24,850 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 12:02:24,850 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 12:02:24,855 handlers.buy INFO QRIS created for ORD-20260730120223-5619 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 12:02:25,621 handlers.buy INFO Sending QRIS photo (b64 len=3109, file name=qris_ORD-20260730120223-5619.png)
+2026-07-30 12:02:26,684 handlers.buy INFO QRIS base64 image sent for ORD-20260730120223-5619, msg_id=1159
+2026-07-30 12:03:08,717 notifier INFO Sent purchase notification for order ORD-20260730120223-5619 to channel -1004427476664
+2026-07-30 15:15:55,792 payments.klikqris INFO Create QRIS: ORD-20260730151555-E40C amount=60000 mode=production
+2026-07-30 15:15:56,309 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 15:15:56,309 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 15:15:56,314 handlers.buy INFO QRIS created for ORD-20260730151555-E40C — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 15:15:56,715 handlers.buy INFO Sending QRIS photo (b64 len=3065, file name=qris_ORD-20260730151555-E40C.png)
+2026-07-30 15:15:57,729 handlers.buy INFO QRIS base64 image sent for ORD-20260730151555-E40C, msg_id=1168
+2026-07-30 15:17:11,295 jobs.poller INFO Order ORD-20260730151555-E40C marked PAID via poller
+2026-07-30 15:17:13,751 notifier INFO Sent purchase notification for order ORD-20260730151555-E40C to channel -1004427476664
+2026-07-30 15:27:06,042 payments.klikqris INFO Create QRIS: ORD-20260730152706-D66B amount=5000 mode=production
+2026-07-30 15:27:06,932 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 15:27:06,932 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 15:27:06,935 handlers.buy INFO QRIS created for ORD-20260730152706-D66B — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 15:27:07,314 handlers.buy INFO Sending QRIS photo (b64 len=3100, file name=qris_ORD-20260730152706-D66B.png)
+2026-07-30 15:27:08,265 handlers.buy INFO QRIS base64 image sent for ORD-20260730152706-D66B, msg_id=1173
+2026-07-30 15:27:51,279 jobs.poller INFO Order ORD-20260730152706-D66B marked PAID via poller
+2026-07-30 15:27:53,590 notifier INFO Sent purchase notification for order ORD-20260730152706-D66B to channel -1004427476664
+INFO:     10.0.1.2:59988 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:52738 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:52744 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46498 - "GET /api/withdrawals HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46498 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59462 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59462 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:42940 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:34706 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:41106 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47786 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:55238 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55238 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55238 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55238 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39262 - "GET /api/withdrawals HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39262 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55170 - "POST /api/feedback/12/reply HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55170 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60616 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:34182 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:44756 - "GET /robots.txt HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:47170 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:47170 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:47170 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "POST /api/orders/ORD-20260730182318-6478/approve HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49736 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49736 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47170 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59760 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:35498 - "POST / HTTP/1.1" 404 Not Found
+2026-07-30 16:42:43,579 payments.klikqris INFO Create QRIS: ORD-20260730164243-E19B amount=5000 mode=production
+2026-07-30 16:42:44,099 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 16:42:44,099 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 16:42:44,101 handlers.buy INFO QRIS created for ORD-20260730164243-E19B — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 16:42:44,445 handlers.buy INFO Sending QRIS photo (b64 len=3062, file name=qris_ORD-20260730164243-E19B.png)
+2026-07-30 16:42:45,383 handlers.buy INFO QRIS base64 image sent for ORD-20260730164243-E19B, msg_id=1178
+2026-07-30 16:44:21,278 jobs.poller INFO Order ORD-20260730164243-E19B marked PAID via poller
+2026-07-30 16:44:23,747 notifier INFO Sent purchase notification for order ORD-20260730164243-E19B to channel -1004427476664
+2026-07-30 16:59:37,153 payments.klikqris INFO Create QRIS: ORD-20260730165937-3892 amount=50000 mode=production
+2026-07-30 16:59:37,872 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 16:59:37,872 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 16:59:37,874 handlers.buy INFO QRIS created for ORD-20260730165937-3892 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 16:59:38,219 handlers.buy INFO Sending QRIS photo (b64 len=3075, file name=qris_ORD-20260730165937-3892.png)
+2026-07-30 16:59:39,154 handlers.buy INFO QRIS base64 image sent for ORD-20260730165937-3892, msg_id=1196
+2026-07-30 17:06:01,452 handlers.buy INFO Order ORD-20260730165937-3892 cancelled by user via Cancel button
+2026-07-30 17:07:31,478 payments.klikqris INFO Create QRIS: ORD-20260730170731-E178 amount=180000 mode=production
+2026-07-30 17:07:32,138 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 17:07:32,138 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 17:07:32,148 handlers.buy INFO QRIS created for ORD-20260730170731-E178 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 17:07:32,564 handlers.buy INFO Sending QRIS photo (b64 len=3045, file name=qris_ORD-20260730170731-E178.png)
+2026-07-30 17:07:33,828 handlers.buy INFO QRIS base64 image sent for ORD-20260730170731-E178, msg_id=1200
+2026-07-30 17:08:31,279 jobs.poller INFO Order ORD-20260730170731-E178 marked PAID via poller
+2026-07-30 17:08:33,773 notifier INFO Sent purchase notification for order ORD-20260730170731-E178 to channel -1004427476664
+2026-07-30 17:50:47,973 payments.klikqris INFO Create QRIS: ORD-20260730175047-9B86 amount=5000 mode=production
+2026-07-30 17:50:48,681 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 17:50:48,682 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 17:50:48,688 handlers.buy INFO QRIS created for ORD-20260730175047-9B86 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 17:50:49,089 handlers.buy INFO Sending QRIS photo (b64 len=3089, file name=qris_ORD-20260730175047-9B86.png)
+2026-07-30 17:50:50,097 handlers.buy INFO QRIS base64 image sent for ORD-20260730175047-9B86, msg_id=1210
+2026-07-30 17:51:31,269 jobs.poller INFO Order ORD-20260730175047-9B86 marked PAID via poller
+2026-07-30 17:51:33,729 notifier INFO Sent purchase notification for order ORD-20260730175047-9B86 to channel -1004427476664
+2026-07-30 17:58:04,570 payments.klikqris INFO Create QRIS: ORD-20260730175804-BA3B amount=10000 mode=production
+2026-07-30 17:58:06,278 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 17:58:06,278 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 17:58:06,280 handlers.buy INFO QRIS created for ORD-20260730175804-BA3B — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 17:58:06,629 handlers.buy INFO Sending QRIS photo (b64 len=3053, file name=qris_ORD-20260730175804-BA3B.png)
+2026-07-30 17:58:07,565 handlers.buy INFO QRIS base64 image sent for ORD-20260730175804-BA3B, msg_id=1215
+2026-07-30 17:59:15,930 handlers.buy INFO Order ORD-20260730175804-BA3B cancelled by user via Cancel button
+2026-07-30 18:23:18,498 payments.klikqris INFO Create QRIS: ORD-20260730182318-6478 amount=100000 mode=production
+2026-07-30 18:23:19,162 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 18:23:19,162 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 18:23:19,165 handlers.buy INFO QRIS created for ORD-20260730182318-6478 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 18:23:19,510 handlers.buy INFO Sending QRIS photo (b64 len=3067, file name=qris_ORD-20260730182318-6478.png)
+2026-07-30 18:23:21,353 handlers.buy INFO QRIS base64 image sent for ORD-20260730182318-6478, msg_id=1223
+2026-07-30 18:23:47,778 notifier INFO Sent purchase notification for order ORD-20260730182318-6478 to channel -1004427476664
+2026-07-30 20:42:05,488 payments.klikqris INFO Create QRIS: ORD-20260730204205-A7B5 amount=120000 mode=production
+2026-07-30 20:42:07,018 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 20:42:07,018 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 20:42:07,024 handlers.buy INFO QRIS created for ORD-20260730204205-A7B5 — has_image_url=True, has_b64=True, has_content=False
+INFO:     10.0.1.2:37194 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:37194 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:37194 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "POST /api/orders/ORD-20260730204205-A7B5/approve HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49132 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49132 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37194 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41566 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:50574 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:40702 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40702 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:40702 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:40702 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40702 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40702 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40702 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40712 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40712 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:58324 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56970 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56970 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56970 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38968 - "POST /api/products/2/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38968 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55454 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55454 - "GET /assets/viintools_bot.png HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56524 - "GET /assets/landscape.png HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55454 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55454 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55454 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55454 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56524 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56524 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35598 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59832 - "POST /api/feedback/13/reply HTTP/1.1" 200 OK
+INFO:     10.0.1.2:59832 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60656 - "POST /api/feedback/14/reply HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60656 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39106 - "POST /api/feedback/11/reply HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39106 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39106 - "GET /api/withdrawals HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39106 - "GET /api/users?page=1&limit=25&filter_by=spent_desc HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39106 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43732 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43732 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54348 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54350 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54350 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38964 - "GET /api/stock/items?page=1&limit=50&product_id=1 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35388 - "GET /api/products HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35388 - "POST /api/stock/items/move-bulk HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35388 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35388 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:53318 - "GET /api/stock/items?page=1&limit=50&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=8&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=7&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=6&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=5&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=4&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=3&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=2&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51950 - "GET /api/stock/items?page=1&limit=50&product_id=1&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38866 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33626 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33626 - "GET /api/stock/items?page=1&limit=50&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33626 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33626 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33626 - "GET /api/stock/items?page=1&limit=50&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60864 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60864 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60864 - "GET /api/stock/items?page=1&limit=50&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:60864 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37688 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37688 - "GET /api/stock/items?page=1&limit=50&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37688 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37688 - "POST /api/orders/ORD-20260731131214-D7BD/approve HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37688 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37688 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:37688 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47572 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48044 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48044 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48052 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:58056 - "GET / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:54416 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54416 - "GET /api/stock/items?page=1&limit=50&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54416 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54416 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54416 - "GET /api/stock/items?page=1&limit=50&status=ready HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40326 - "GET /api/stock/export/1 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46516 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:41618 - "GET /api/stock/items?page=1&limit=50&status=ready&search=mfvxxpwqs1 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46314 - "POST /api/stock/items/865/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46314 - "GET /api/stock/items?page=1&limit=50&status=ready&search=mfvxxpwqs1 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40302 - "GET /api/stock/items?page=1&limit=50&status=ready&search=7zj6vip2m2 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54202 - "POST /api/stock/items/877/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54202 - "GET /api/stock/items?page=1&limit=50&status=ready&search=7zj6vip2m2 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50092 - "GET /api/stock/items?page=1&limit=50&status=ready&search=mp3z11xge3 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50092 - "POST /api/stock/items/883/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50092 - "GET /api/stock/items?page=1&limit=50&status=ready&search=mp3z11xge3 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48504 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48504 - "POST /api/auth/login HTTP/1.1" 200 OK
+2026-07-30 20:42:07,361 handlers.buy INFO Sending QRIS photo (b64 len=3081, file name=qris_ORD-20260730204205-A7B5.png)
+2026-07-30 20:42:09,020 handlers.buy INFO QRIS base64 image sent for ORD-20260730204205-A7B5, msg_id=1231
+2026-07-30 20:42:33,190 notifier INFO Sent purchase notification for order ORD-20260730204205-A7B5 to channel -1004427476664
+2026-07-30 22:43:14,494 payments.klikqris INFO Create QRIS: ORD-20260730224314-73F3 amount=5000 mode=production
+2026-07-30 22:43:15,923 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 22:43:15,924 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-30 22:43:15,927 handlers.buy INFO QRIS created for ORD-20260730224314-73F3 — has_image_url=True, has_b64=True, has_content=False
+2026-07-30 22:43:16,278 handlers.buy INFO Sending QRIS photo (b64 len=3101, file name=qris_ORD-20260730224314-73F3.png)
+2026-07-30 22:43:17,200 handlers.buy INFO QRIS base64 image sent for ORD-20260730224314-73F3, msg_id=1238
+2026-07-30 22:44:31,426 jobs.poller INFO Order ORD-20260730224314-73F3 marked PAID via poller
+2026-07-30 22:44:33,427 notifier INFO Sent purchase notification for order ORD-20260730224314-73F3 to channel -1004427476664
+2026-07-31 01:11:03,557 __main__ ERROR Exception handling update: Bad Gateway
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/usr/local/lib/python3.11/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "/usr/local/lib/python3.11/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/telegram/ext/_extbot.py", line 680, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/telegram/_bot.py", line 4767, in get_updates
+    await self._post(
+  File "/usr/local/lib/python3.11/site-packages/telegram/_bot.py", line 712, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/telegram/ext/_extbot.py", line 378, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/telegram/_bot.py", line 741, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/telegram/request/_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.NetworkError: Bad Gateway
+2026-07-31 13:12:14,555 payments.klikqris INFO Create QRIS: ORD-20260731131214-D7BD amount=5000 mode=production
+2026-07-31 13:12:15,521 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 13:12:15,521 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 13:12:15,528 handlers.buy INFO QRIS created for ORD-20260731131214-D7BD — has_image_url=True, has_b64=True, has_content=False
+2026-07-31 13:12:15,877 handlers.buy INFO Sending QRIS photo (b64 len=3131, file name=qris_ORD-20260731131214-D7BD.png)
+2026-07-31 13:12:16,830 handlers.buy INFO QRIS base64 image sent for ORD-20260731131214-D7BD, msg_id=1339
+2026-07-31 13:12:52,706 notifier INFO Sent purchase notification for order ORD-20260731131214-D7BD to channel -1004427476664
+2026-07-31 14:02:04,121 payments.klikqris INFO Create QRIS: ORD-20260731140204-D700 amount=5000 mode=production
+2026-07-31 14:02:06,090 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 14:02:06,090 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 14:02:06,093 handlers.buy INFO QRIS created for ORD-20260731140204-D700 — has_image_url=True, has_b64=True, has_content=False
+2026-07-31 14:02:06,481 handlers.buy INFO Sending QRIS photo (b64 len=3090, file name=qris_ORD-20260731140204-D700.png)
+2026-07-31 14:02:07,510 handlers.buy INFO QRIS base64 image sent for ORD-20260731140204-D700, msg_id=1347
+2026-07-31 14:03:01,348 jobs.poller INFO Order ORD-20260731140204-D700 marked PAID via poller
+2026-07-31 14:03:04,330 notifier INFO Sent purchase notification for order ORD-20260731140204-D700 to channel -1004427476664
+INFO:     10.0.1.2:48504 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48504 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48504 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49324 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55334 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55334 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55334 - "GET /api/stock/items?page=1&limit=50&search=mp3z11xge3 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49442 - "GET /api/stock/items?page=1&limit=50&search=gowoc4i7pt HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49442 - "POST /api/stock/items/890/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49442 - "GET /api/stock/items?page=1&limit=50&search=gowoc4i7pt HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54548 - "GET /api/stock/items?page=1&limit=50&search=hc2they2ya HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54548 - "POST /api/stock/items/897/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:54548 - "GET /api/stock/items?page=1&limit=50&search=hc2they2ya HTTP/1.1" 200 OK
+INFO:     10.0.1.2:56954 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46418 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50808 - "GET /api/users?page=1&limit=25&filter_by=spent_desc HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50808 - "GET /api/withdrawals HTTP/1.1" 200 OK
+INFO:     10.0.1.2:50808 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:36932 - "POST / HTTP/1.1" 404 Not Found
+2026-07-31 14:10:35,603 payments.klikqris INFO Create QRIS: ORD-20260731141035-4A6E amount=25000 mode=production
+2026-07-31 14:10:36,254 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 14:10:36,254 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 14:10:36,258 handlers.buy INFO QRIS created for ORD-20260731141035-4A6E — has_image_url=True, has_b64=True, has_content=False
+2026-07-31 14:10:36,634 handlers.buy INFO Sending QRIS photo (b64 len=3086, file name=qris_ORD-20260731141035-4A6E.png)
+2026-07-31 14:10:38,762 handlers.buy INFO QRIS base64 image sent for ORD-20260731141035-4A6E, msg_id=1413
+2026-07-31 14:10:52,762 handlers.buy INFO Order ORD-20260731141035-4A6E cancelled by user via Cancel button
+INFO:     10.0.1.2:38446 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38446 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38446 - "GET /api/stock/items?page=1&limit=50&search=hc2they2ya HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55950 - "GET /api/stock/items?page=1&limit=50&search=ip7g5ddive HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55950 - "POST /api/stock/items/902/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:55950 - "GET /api/stock/items?page=1&limit=50&search=ip7g5ddive HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49744 - "GET /api/stock/items?page=1&limit=50&search=6d0nn8fgak HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49744 - "POST /api/stock/items/903/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49744 - "GET /api/stock/items?page=1&limit=50&search=6d0nn8fgak HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49466 - "GET /api/stock/items?page=1&limit=50&search=yw0c5boauq HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49466 - "POST /api/stock/items/904/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49466 - "GET /api/stock/items?page=1&limit=50&search=yw0c5boauq HTTP/1.1" 200 OK
+INFO:     10.0.1.2:36162 - "GET /api/stock/items?page=1&limit=50&search=cs6967zmzr HTTP/1.1" 200 OK
+INFO:     10.0.1.2:36162 - "POST /api/stock/items/905/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:36162 - "GET /api/stock/items?page=1&limit=50&search=cs6967zmzr HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33662 - "GET /api/stock/items?page=1&limit=50&search=pdai72f88c HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33662 - "POST /api/stock/items/906/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33662 - "GET /api/stock/items?page=1&limit=50&search=pdai72f88c HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43028 - "GET /api/stock/items?page=1&limit=50&search=o3kqzs2ewb HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43028 - "POST /api/stock/items/907/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43028 - "GET /api/stock/items?page=1&limit=50&search=o3kqzs2ewb HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49822 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49822 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49822 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49822 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49822 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:49822 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51400 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51400 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51400 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43686 - "GET /api/admins HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43692 - "GET /api/vouchers HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43704 - "GET /api/settings/commission HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43720 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43908 - "POST /api/feedback/15/reply HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43908 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47892 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:47892 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48884 - "GET /api/stock/items?page=1&limit=50&search=mh19rzh72w HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48884 - "POST /api/stock/items/938/status HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48884 - "GET /api/stock/items?page=1&limit=50&search=mh19rzh72w HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43162 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:35720 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35720 - "GET /assets/viintools_bot.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:35720 - "GET /assets/landscape.png HTTP/1.1" 304 Not Modified
+INFO:     10.0.1.2:35720 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35720 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35720 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35720 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35732 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35722 - "GET /api/feedback HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35722 - "GET /api/withdrawals HTTP/1.1" 200 OK
+INFO:     10.0.1.2:35722 - "GET /api/users?page=1&limit=25&filter_by=spent_desc HTTP/1.1" 200 OK
+INFO:     10.0.1.2:45158 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:45158 - "POST /api/orders/ORD-20260731151839-E473/approve HTTP/1.1" 200 OK
+2026-07-31 15:18:39,833 payments.klikqris INFO Create QRIS: ORD-20260731151839-E473 amount=10000 mode=production
+2026-07-31 15:18:40,429 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 15:18:40,429 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 15:18:40,431 handlers.buy INFO QRIS created for ORD-20260731151839-E473 — has_image_url=True, has_b64=True, has_content=False
+2026-07-31 15:18:40,850 handlers.buy INFO Sending QRIS photo (b64 len=3087, file name=qris_ORD-20260731151839-E473.png)
+2026-07-31 15:18:41,813 handlers.buy INFO QRIS base64 image sent for ORD-20260731151839-E473, msg_id=1421
+INFO:     10.0.1.2:45158 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:45158 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:45158 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48436 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40096 - "POST /api/orders/ORD-20260731151839-E473/deliver-preorder HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40096 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40112 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40112 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:40096 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51044 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51044 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:51044 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:48442 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:51212 - "GET / HTTP/1.1" 404 Not Found
+2026-07-31 15:19:22,132 notifier INFO Sent purchase notification for order ORD-20260731151839-E473 to channel -1004427476664
+INFO:     10.0.1.2:57716 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:46670 - "GET /curl/a91c1641a04a6e7b5281c7b10190908667015b82b39e456271ecd0eb3806ce37 HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:47930 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:46268 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:33464 - "POST / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:38390 - "GET /admin HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38390 - "GET /assets/viintools_bot.png HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38402 - "GET /assets/landscape.png HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38390 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38390 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38390 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38390 - "GET /api/analytics/chart HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38402 - "GET /api/orders?limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38402 - "GET /api/orders?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46608 - "GET /api/products?all=true HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46608 - "GET /api/stock/items?page=1&limit=50 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39480 - "GET /api/stock/items?page=1&limit=50&search=c3 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:39496 - "GET /api/stock/items?page=1&limit=50&search=c3fc HTTP/1.1" 200 OK
+INFO:     10.0.1.2:38644 - "GET /api/stock/items?page=1&limit=50&search=7l HTTP/1.1" 200 OK
+INFO:     10.0.1.2:36982 - "GET /api/stock/items?page=1&limit=50&search=eh4 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:46696 - "GET / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:46696 - "GET /robots.txt HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:46696 - "GET / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:46696 - "GET /robots.txt HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:44058 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41778 - "POST /api/products/7/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41778 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41786 - "POST /api/products/5/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:41786 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33008 - "POST /api/products/4/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:33008 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43856 - "POST /api/products/6/update HTTP/1.1" 200 OK
+INFO:     10.0.1.2:43856 - "GET /api/products?page=1&limit=10 HTTP/1.1" 200 OK
+INFO:     10.0.1.2:34300 - "GET / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:34300 - "GET / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:34300 - "GET / HTTP/1.1" 404 Not Found
+INFO:     10.0.1.2:34300 - "GET / HTTP/1.1" 404 Not Found
+2026-07-31 22:09:45,009 payments.klikqris INFO Create QRIS: ORD-20260731220945-EE8A amount=50000 mode=production
+2026-07-31 22:09:45,553 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 22:09:45,553 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-07-31 22:09:45,557 handlers.buy INFO QRIS created for ORD-20260731220945-EE8A — has_image_url=True, has_b64=True, has_content=False
+2026-07-31 22:09:45,906 handlers.buy INFO Sending QRIS photo (b64 len=3070, file name=qris_ORD-20260731220945-EE8A.png)
+2026-07-31 22:09:47,091 handlers.buy INFO QRIS base64 image sent for ORD-20260731220945-EE8A, msg_id=1436
+2026-07-31 22:57:31,024 apscheduler.scheduler WARNING Execution of job "klikqris_poller (trigger: interval[0:00:10], next run at: 2026-07-31 22:57:31 UTC)" skipped: maximum number of running instances reached (1)
+2026-07-31 22:58:01,015 apscheduler.scheduler WARNING Execution of job "klikqris_poller (trigger: interval[0:00:10], next run at: 2026-07-31 22:58:01 UTC)" skipped: maximum number of running instances reached (1)
+2026-07-31 23:09:51,286 jobs.poller INFO Order ORD-20260731220945-EE8A CANCELLED via poller (EXPIRED), released 0 stock
+2026-07-31 23:09:52,547 jobs.poller INFO Deleted QRIS message 1436 for order ORD-20260731220945-EE8A
+2026-08-01 03:37:33,593 payments.klikqris INFO Create QRIS: ORD-20260801033733-5F80 amount=5000 mode=production
+2026-08-01 03:37:34,190 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-08-01 03:37:34,190 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-08-01 03:37:34,195 handlers.buy INFO QRIS created for ORD-20260801033733-5F80 — has_image_url=True, has_b64=True, has_content=False
+2026-08-01 03:37:34,574 handlers.buy INFO Sending QRIS photo (b64 len=3037, file name=qris_ORD-20260801033733-5F80.png)
+2026-08-01 03:37:35,559 handlers.buy INFO QRIS base64 image sent for ORD-20260801033733-5F80, msg_id=1446
+2026-08-01 03:38:31,312 jobs.poller INFO Order ORD-20260801033733-5F80 marked PAID via poller
+2026-08-01 03:38:33,645 notifier INFO Sent purchase notification for order ORD-20260801033733-5F80 to channel -1004427476664
+2026-08-01 04:59:05,042 payments.klikqris INFO Create QRIS: ORD-20260801045905-05D8 amount=15000 mode=production
+2026-08-01 04:59:08,301 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-08-01 04:59:08,301 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-08-01 04:59:08,304 handlers.buy INFO QRIS created for ORD-20260801045905-05D8 — has_image_url=True, has_b64=True, has_content=False
+2026-08-01 04:59:08,688 handlers.buy INFO Sending QRIS photo (b64 len=3098, file name=qris_ORD-20260801045905-05D8.png)
+2026-08-01 04:59:09,671 handlers.buy INFO QRIS base64 image sent for ORD-20260801045905-05D8, msg_id=1456
+2026-08-01 05:01:21,364 jobs.poller INFO Order ORD-20260801045905-05D8 marked PAID via poller
+2026-08-01 05:01:23,479 notifier INFO Sent purchase notification for order ORD-20260801045905-05D8 to channel -1004427476664
+2026-08-01 06:44:25,110 payments.klikqris INFO Create QRIS: ORD-20260801064425-45DB amount=255000 mode=production
+2026-08-01 06:44:26,521 payments.klikqris INFO KlikQRIS create response status=True keys=['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-08-01 06:44:26,521 handlers.buy INFO KlikQRIS response keys: ['order_id', 'nama_toko', 'tanggal', 'notifwa', 'mdr', 'redirect_url', 'amount_uniq', 'amount', 'total_amount', 'status', 'notified_expired', 'qris_url', 'expired_at', 'paid_at', 'signature', 'keterangan', 'expired_menit', 'created_at', 'updated_at', 'qris_image']
+2026-08-01 06:44:26,525 handlers.buy INFO QRIS created for ORD-20260801064425-45DB — has_image_url=True, has_b64=True, has_content=False
+2026-08-01 06:44:26,870 handlers.buy INFO Sending QRIS photo (b64 len=3065, file name=qris_ORD-20260801064425-45DB.png)
+2026-08-01 06:44:27,794 handlers.buy INFO QRIS base64 image sent for ORD-20260801064425-45DB, msg_id=1468
+2026-08-01 06:45:31,323 jobs.poller INFO Order ORD-20260801064425-45DB marked PAID via poller
+2026-08-01 06:45:33,872 notifier INFO Sent purchase notification for order ORD-20260801064425-45DB to channel -1004427476664

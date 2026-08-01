@@ -985,8 +985,8 @@
                                 </select>
                                 <select id="stock-filter-status" class="form-control" style="width: 140px;"
                                     onchange="loadStockItems(1)">
-                                    <option value="">Semua Status</option>
-                                    <option value="ready">Ready</option>
+                                    <option value="ready" selected>Ready</option>
+                                    <option value="all">Semua Status</option>
                                     <option value="sold">Terjual</option>
                                 </select>
                                 <button id="btn-toggle-mask" class="btn btn-sm btn-outline" onclick="togglePasswordMask()" title="Sensor/Tampilkan Password"><i class="fa-solid fa-eye-slash"></i> Sensor Password</button>
@@ -1303,68 +1303,6 @@
                     </div>
                 </div>
 
-                <!-- VOUCHER MANAGEMENT SECTION -->
-                <div class="grid-2" style="margin-top: 24px;">
-                    <div class="section-card">
-                        <div class="section-header">
-                            <span class="section-title"><i class="fa-solid fa-ticket"></i> Daftar Voucher</span>
-                        </div>
-                        <div class="table-responsive">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>KODE</th>
-                                        <th>TIPE</th>
-                                        <th>NILAI</th>
-                                        <th>MIN. BELI</th>
-                                        <th>TERPAKAI</th>
-                                        <th>STATUS</th>
-                                        <th>AKSI</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="vouchers-table-body">
-                                    <tr>
-                                        <td colspan="7" style="text-align:center;">Memuat voucher...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="section-card">
-                        <div class="section-header">
-                            <span class="section-title"><i class="fa-solid fa-square-plus"></i> Tambah Voucher
-                                Baru</span>
-                        </div>
-                        <form id="form-add-voucher">
-                            <div class="form-group">
-                                <label>Kode Voucher</label>
-                                <input type="text" id="v-code" class="form-control" placeholder="Contoh: PROMO20"
-                                    required style="text-transform: uppercase;">
-                            </div>
-                            <div class="form-group">
-                                <label>Tipe Diskon</label>
-                                <select id="v-type" class="form-control">
-                                    <option value="fixed">Nominal Tetap (Rp)</option>
-                                    <option value="percent">Persentase (%)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Nilai Diskon</label>
-                                <input type="number" id="v-value" class="form-control" placeholder="10000 atau 20"
-                                    required>
-                            </div>
-                            <div class="form-group">
-                                <label>Minimal Pembelian (0 = tanpa minimal)</label>
-                                <input type="number" id="v-min" class="form-control" placeholder="0" value="0">
-                            </div>
-                            <div class="form-group">
-                                <label>Maks. Penggunaan (0 = unlimited)</label>
-                                <input type="number" id="v-max" class="form-control" placeholder="0" value="0">
-                            </div>
-                            <button type="submit" class="btn btn-success"><i class="fa-solid fa-plus"></i> Buat
-                                Voucher</button>
-                        </form>
-                    </div>
                 </div>
             </div>
         </main>
@@ -1402,9 +1340,14 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Deskripsi Produk</label>
+                    <label>Deskripsi Produk (Tampil di Bot)</label>
                     <textarea id="add-p-desc" class="form-control"
                         placeholder="Keterangan garansi, fitur, dll..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>📌 Instruksi Penggunaan / Info Pembelian (Dikirimkan ke Pembeli bersama Akun)</label>
+                    <textarea id="add-p-instruction" class="form-control" style="min-height: 90px; white-space: pre-wrap;"
+                        placeholder="Panduan penggunaan, instruksi garansi, link klaim, dll. (Mendukung Enter / Baris Baru)"></textarea>
                 </div>
                 <button type="submit" class="btn"><i class="fa-solid fa-floppy-disk"></i> Simpan Produk</button>
             </form>
@@ -1437,8 +1380,12 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Deskripsi Produk</label>
+                    <label>Deskripsi Produk (Tampil di Bot)</label>
                     <textarea id="edit-p-desc" class="form-control"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>📌 Instruksi Penggunaan / Info Pembelian (Dikirimkan ke Pembeli bersama Akun)</label>
+                    <textarea id="edit-p-instruction" class="form-control" style="min-height: 90px; white-space: pre-wrap;"></textarea>
                 </div>
                 <div class="form-group">
                     <label>Status Produk</label>
@@ -1558,7 +1505,6 @@
             if (tabId === 'withdrawals') loadWithdrawals();
             if (tabId === 'admins') {
                 loadAdmins();
-                loadVouchers();
                 loadCommissionSettings();
             }
         }
@@ -2534,79 +2480,7 @@
         }
 
         // =========================================================================
-        // VOUCHER MANAGEMENT
-        // =========================================================================
-
-        async function loadVouchers() {
-            const res = await fetch('/api/vouchers');
-            const data = await res.json();
-            const tbody = document.getElementById('vouchers-table-body');
-            tbody.innerHTML = '';
-
-            (data.vouchers || []).forEach(v => {
-                const tr = document.createElement('tr');
-                const dtype = v.discount_type === 'percent' ? '%' : 'Rp';
-                const statusBadge = v.is_active ? '<span class="badge badge-success">Aktif</span>' : '<span class="badge badge-danger">Nonaktif</span>';
-                tr.innerHTML = `
-                    <td><code>${v.code}</code></td>
-                    <td>${v.discount_type === 'percent' ? 'Persentase' : 'Nominal'}</td>
-                    <td><b>${dtype} ${Number(v.discount_value).toLocaleString()}</b></td>
-                    <td>${v.min_purchase > 0 ? formatRupiah(v.min_purchase) : '-'}</td>
-                    <td>${v.used_count}/${v.max_uses || '∞'}</td>
-                    <td>${statusBadge}</td>
-                    <td>
-                        <div style="display:flex; gap:6px;">
-                            <button class="btn btn-sm btn-outline" onclick="toggleVoucher(${v.id})">🔄</button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteVoucher(${v.id})"><i class="fa-solid fa-trash"></i></button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        document.getElementById('form-add-voucher').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const code = document.getElementById('v-code').value.trim().toUpperCase();
-            const discount_type = document.getElementById('v-type').value;
-            const discount_value = parseInt(document.getElementById('v-value').value);
-            const min_purchase = parseInt(document.getElementById('v-min').value) || 0;
-            const max_uses = parseInt(document.getElementById('v-max').value) || 0;
-
-            const res = await fetch('/api/vouchers/add', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, discount_type, discount_value, min_purchase, max_uses })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showToast(`Voucher ${code} berhasil dibuat!`, 'success');
-                document.getElementById('form-add-voucher').reset();
-                loadVouchers();
-            } else {
-                showToast(data.error || 'Gagal membuat voucher', 'error');
-            }
-        });
-
-        async function toggleVoucher(vid) {
-            const res = await fetch(`/api/vouchers/${vid}/toggle`, { method: 'POST' });
-            if (res.ok) {
-                showToast('Status voucher diubah!', 'success');
-                loadVouchers();
-            }
-        }
-
-        async function deleteVoucher(vid) {
-            if (!confirm('Hapus voucher ini?')) return;
-            const res = await fetch(`/api/vouchers/${vid}`, { method: 'DELETE' });
-            if (res.ok) {
-                showToast('Voucher dihapus!', 'warning');
-                loadVouchers();
-            }
-        }
-
-        // =========================================================================
-        // FEEDBACK MANAGEMENT
+        // FEEDBACK MANAGEMENT (Multi-Turn Inbox)
         // =========================================================================
 
         async function loadFeedback() {
@@ -2629,12 +2503,11 @@
                     <td><span class="badge badge-info">${fb.category}</span></td>
                     <td style="max-width:250px; font-size:13px;">${msg}</td>
                     <td>${statusBadge}</td>
-                    <td style="font-size:12px;">${fb.created_at || '-'}</td>
+                    <td><span style="font-size:12px;">${fb.created_at || '-'}</span></td>
                     <td>
                         <div style="display:flex; gap:6px;">
-                            <button class="btn btn-sm btn-outline" onclick="viewFeedback(${fb.id})"><i class="fa-solid fa-eye"></i></button>
-                            ${fb.status === 'open' ? `<button class="btn btn-sm btn-success" onclick="replyFeedback(${fb.id})"><i class="fa-solid fa-reply"></i></button>` : ''}
-                            ${fb.status !== 'closed' ? `<button class="btn btn-sm btn-danger" onclick="closeFeedback(${fb.id})"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                            <button class="btn btn-sm btn-primary" onclick="openFeedbackChat(${fb.id})"><i class="fa-solid fa-comments"></i> Chat Inbox</button>
+                            ${fb.status !== 'closed' ? `<button class="btn btn-sm btn-danger" onclick="closeFeedback(${fb.id})"><i class="fa-solid fa-xmark"></i> Close</button>` : ''}
                         </div>
                     </td>
                 `;
@@ -2642,33 +2515,77 @@
             });
         }
 
-        function viewFeedback(fid) {
-            fetch('/api/feedback').then(r => r.json()).then(data => {
-                const fb = (data.feedback || []).find(f => f.id === fid);
-                if (!fb) return;
-                const replySection = fb.admin_reply ? `<br><br><b>Balasan Admin:</b><br>${fb.admin_reply}` : '';
-                showToast(`#${fb.id} | @${fb.username || '?'} | ${fb.category}: ${fb.message}${replySection}`, 'info');
-            });
-        }
+        async function openFeedbackChat(fid) {
+            document.getElementById('fb-chat-id').value = fid;
+            document.getElementById('fb-chat-title').innerText = `💬 Thread Feedback #${fid}`;
+            const chatBox = document.getElementById('fb-chat-messages');
+            chatBox.innerHTML = '<div style="text-align:center; color:var(--text-muted);">Memuat riwayat percakapan...</div>';
+            document.getElementById('modal-feedback-chat').classList.add('active');
 
-        async function replyFeedback(fid) {
-            const reply = prompt('Masukkan balasan untuk feedback ini:');
-            if (!reply || !reply.trim()) return;
-            const res = await fetch(`/api/feedback/${fid}/reply`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reply: reply.trim() })
-            });
-            if (res.ok) {
-                showToast('Balasan terkirim ke pengguna!', 'success');
-                loadFeedback();
+            try {
+                const res = await fetch(`/api/feedback/${fid}/messages`);
+                const data = await res.json();
+                chatBox.innerHTML = '';
+                const messages = data.messages || [];
+
+                if (messages.length === 0) {
+                    if (data.feedback && data.feedback.message) {
+                        chatBox.innerHTML = `
+                            <div style="align-self: flex-start; max-width: 80%; background: #1e293b; border-radius: 8px; padding: 10px 14px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 11px; color: var(--primary); font-weight: 600; margin-bottom: 4px;">User (@${data.feedback.username || '?'})</div>
+                                <div style="font-size: 13px; white-space: pre-wrap;">${data.feedback.message}</div>
+                                <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px; text-align: right;">${data.feedback.created_at || ''}</div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    messages.forEach(m => {
+                        const isAdmin = m.sender === 'admin';
+                        const div = document.createElement('div');
+                        div.style.cssText = isAdmin
+                            ? 'align-self: flex-end; max-width: 80%; background: #065f46; border-radius: 8px; padding: 10px 14px; border: 1px solid var(--success);'
+                            : 'align-self: flex-start; max-width: 80%; background: #1e293b; border-radius: 8px; padding: 10px 14px; border: 1px solid var(--border-color);';
+                        div.innerHTML = `
+                            <div style="font-size: 11px; color: ${isAdmin ? '#a7f3d0' : 'var(--primary)'}; font-weight: 600; margin-bottom: 4px;">${isAdmin ? '🛡️ Admin' : '👤 User'}</div>
+                            <div style="font-size: 13px; white-space: pre-wrap;">${m.message}</div>
+                            <div style="font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px; text-align: right;">${m.created_at || ''}</div>
+                        `;
+                        chatBox.appendChild(div);
+                    });
+                }
+                chatBox.scrollTop = chatBox.scrollHeight;
+            } catch (err) {
+                chatBox.innerHTML = '<div style="text-align:center; color:var(--danger);">Gagal memuat pesan.</div>';
             }
         }
 
+        document.getElementById('form-fb-reply').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fid = document.getElementById('fb-chat-id').value;
+            const reply = document.getElementById('fb-chat-reply-input').value.trim();
+            if (!reply) return;
+
+            const res = await fetch(`/api/feedback/${fid}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reply })
+            });
+
+            if (res.ok) {
+                showToast('Balasan terkirim ke pengguna!', 'success');
+                document.getElementById('fb-chat-reply-input').value = '';
+                openFeedbackChat(fid);
+                loadFeedback();
+            } else {
+                showToast('Gagal mengirim balasan', 'error');
+            }
+        });
+
         async function closeFeedback(fid) {
+            if (!confirm(`Tutup thread feedback #${fid}?`)) return;
             const res = await fetch(`/api/feedback/${fid}/close`, { method: 'POST' });
             if (res.ok) {
-                showToast('Feedback ditutup!', 'warning');
+                showToast(`Feedback #${fid} ditutup!`, 'info');
                 loadFeedback();
             }
         }
@@ -2958,6 +2875,27 @@
                 </div>
                 <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Kirim Broadcast
                     Sekarang</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL FEEDBACK CHAT INBOX -->
+    <div id="modal-feedback-chat" class="modal">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header">
+                <span class="modal-title" id="fb-chat-title"><i class="fa-solid fa-comments" style="color: var(--primary);"></i> Thread Feedback</span>
+                <button class="modal-close" onclick="closeModal('modal-feedback-chat')">&times;</button>
+            </div>
+            <div id="fb-chat-messages" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px; background: rgba(15, 23, 42, 0.6); border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--border-color);">
+                <div style="text-align: center; color: var(--text-muted);">Memuat riwayat percakapan...</div>
+            </div>
+            <form id="form-fb-reply">
+                <input type="hidden" id="fb-chat-id">
+                <div class="form-group">
+                    <label><i class="fa-solid fa-reply"></i> Balas ke Pengguna (Pesan akan langsung terkirim di Telegram):</label>
+                    <textarea id="fb-chat-reply-input" class="form-control" placeholder="Tuliskan pesan balasan Anda..." style="min-height: 80px;" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Kirim Balasan</button>
             </form>
         </div>
     </div>

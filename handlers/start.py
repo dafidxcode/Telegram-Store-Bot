@@ -414,7 +414,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 pass
             return
 
-    if admin_state == "feedback_msg":
+    if admin_state == "feedback_msg" or (update.message and update.message.reply_to_message and "Balasan Admin" in (update.message.reply_to_message.text or "")):
         message = update.message
         if message is None or not message.text:
             return
@@ -423,15 +423,42 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         context.user_data.pop("admin_state", None)
 
         username = update.effective_user.username or "" if update.effective_user else ""
-        db.add_feedback(user_id, username, category, feedback_text)
+        user_display = f"@{username}" if username else (update.effective_user.first_name if update.effective_user else str(user_id))
+        fb_id = db.add_feedback(user_id, username, category, feedback_text)
+
+        try:
+            from notifier import send_admin_feedback_notif
+            await send_admin_feedback_notif(context.bot, fb_id, user_display, feedback_text)
+        except Exception as e:
+            logger.warning("Failed to send admin feedback notification: %s", e)
 
         await message.reply_text(
-            t("feedback_sent", lang),
+            f"✅ *Pesan Kritik & Saran #{fb_id} berhasil dikirimkan ke Admin!*\n\n"
+            f"💡 _Admin akan membalas pesan Anda sesegera mungkin. Anda dapat membalas pesan dari Admin kapan saja di sini._",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t("btn_home", lang), callback_data="menu:start")],
             ]),
         )
+
+
+async def handle_admin_fb_reply_btn(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None or not query.data:
+        return
+    await query.answer()
+    parts = query.data.split(":")
+    if len(parts) >= 2:
+        try:
+            fid = int(parts[1])
+            context.user_data["admin_state"] = "feedback_reply"
+            context.user_data["feedback_reply_id"] = fid
+            await query.message.reply_text(
+                f"✍️ *Kirimkan balasan Anda untuk Feedback #{fid}:*",
+                parse_mode="Markdown",
+            )
+        except ValueError:
+            pass
 
 
 def register(app: Application) -> None:
@@ -445,6 +472,7 @@ def register(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(handle_lang_toggle, pattern=r"^menu:lang$"))
     app.add_handler(CallbackQueryHandler(handle_referral_claim, pattern=r"^referral:claim$"))
     app.add_handler(CallbackQueryHandler(handle_feedback_category, pattern=r"^feedback:"))
+    app.add_handler(CallbackQueryHandler(handle_admin_fb_reply_btn, pattern=r"^admin_reply_fb:"))
     app.add_handler(CallbackQueryHandler(handle_menu_button, pattern=r"^menu:"))
     app.add_handler(CallbackQueryHandler(handle_admin_button, pattern=r"^admin:"))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, handle_text_input), group=5)
@@ -1026,8 +1054,6 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if order.get("original_total") and order["original_total"] > order["total"]:
             discount = order["original_total"] - order["total"]
             text += f"{t('purchase_detail_discount', lang)}: -Rp {format_rupiah(discount)}\n"
-        if order.get("voucher_code"):
-            text += f"{t('purchase_detail_voucher', lang)}: `{order['voucher_code']}`\n"
 
         text += (
             f"{t('purchase_detail_status', lang)}: {status_emoji} {order.get('status', '').upper()}\n"

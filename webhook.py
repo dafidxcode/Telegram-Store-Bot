@@ -57,10 +57,28 @@ async def _verify_admin(request: Request) -> int:
         if auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
 
-    if not token or token not in _admin_sessions:
+    if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    admin_id = _admin_sessions[token]
+    admin_id = None
+    if token in _admin_sessions:
+        admin_id = _admin_sessions[token]
+    else:
+        admin_id = db.validate_admin_session(token)
+        if not admin_id:
+            expected_main = _get_admin_token(config.ADMIN_USER_ID)
+            if token == expected_main:
+                admin_id = config.ADMIN_USER_ID
+            else:
+                for aid in config.ADMIN_IDS:
+                    if token == _get_admin_token(aid):
+                        admin_id = aid
+                        break
+
+    if not admin_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    _admin_sessions[token] = admin_id
     if admin_id not in config.ADMIN_IDS and admin_id != config.ADMIN_USER_ID:
         raise HTTPException(status_code=403, detail="Forbidden")
     return admin_id
@@ -97,17 +115,19 @@ async def api_auth_login(request: Request, response: Response):
     user_id = config.ADMIN_USER_ID
     token = _get_admin_token(user_id)
     _admin_sessions[token] = user_id
+    db.create_admin_session(token, user_id, duration_days=30)
 
     res = JSONResponse(content={"success": True, "token": token, "user_id": user_id})
-    res.set_cookie(key="admin_token", value=token, httponly=True, max_age=86400 * 7, path="/")
+    res.set_cookie(key="admin_token", value=token, httponly=True, max_age=86400 * 30, path="/")
     return res
 
 
 @app.post("/api/auth/logout")
 async def api_auth_logout(request: Request, response: Response):
     token = request.cookies.get("admin_token")
-    if token and token in _admin_sessions:
-        del _admin_sessions[token]
+    if token:
+        _admin_sessions.pop(token, None)
+        db.delete_admin_session(token)
     res = JSONResponse(content={"success": True})
     res.delete_cookie("admin_token", path="/")
     return res
@@ -206,12 +226,13 @@ async def api_add_product(request: Request):
     name = str(body.get("name", "")).strip()
     price = int(body.get("price", 0))
     desc = str(body.get("description", "")).strip()
+    instruction = str(body.get("instruction", "")).strip()
     stock_type = str(body.get("stock_type", "limited")).strip()
 
     if not name or price <= 0:
         return JSONResponse(status_code=400, content={"error": "Nama dan harga produk tidak valid!"})
 
-    pid = db.add_product(name=name, description=desc, price=price, stock_type=stock_type)
+    pid = db.add_product(name=name, description=desc, price=price, stock_type=stock_type, instruction=instruction)
     return {"success": True, "product_id": pid}
 
 
@@ -223,6 +244,7 @@ async def api_update_product(pid: int, request: Request):
     name = body.get("name")
     price = body.get("price")
     description = body.get("description")
+    instruction = body.get("instruction")
     stock_type = body.get("stock_type")
     is_active = body.get("is_active")
 
@@ -233,6 +255,8 @@ async def api_update_product(pid: int, request: Request):
         kwargs["price"] = int(price)
     if description is not None:
         kwargs["description"] = str(description).strip()
+    if instruction is not None:
+        kwargs["instruction"] = str(instruction).strip()
     if stock_type is not None:
         kwargs["stock_type"] = str(stock_type).strip()
     if is_active is not None:
@@ -351,6 +375,11 @@ async def api_get_stock_items(
     limit: int = 50,
 ):
     await _verify_admin(request)
+    if status == "" or status is None:
+        status = "ready"
+    elif status == "all":
+        status = None
+
     items, total = db.get_stock_items(
         product_id=product_id,
         status=status,
@@ -796,119 +825,67 @@ async def api_remove_admin(request: Request):
 # Webhook endpoint for KlikQRIS
 # ---------------------------------------------------------------------------
 
-@app.post("/webhook/klikqris")
+@app.api_route("/webhook/klikqris", methods=["GET", "POST"])
+@app.api_route("/webhook/klikqris/", methods=["GET", "POST"])
+@app.api_route("/api/webhook/klikqris", methods=["GET", "POST"])
+@app.api_route("/api/webhook/klikqris/", methods=["GET", "POST"])
 async def klikqris_webhook(request: Request):
-    body = await request.json()
-    logger.info("KlikQRIS webhook: %s", json.dumps(body))
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        try:
+            form_data = await request.form()
+            body = dict(form_data)
+        except Exception:
+            raw = await request.body()
+            if raw:
+                try:
+                    body = json.loads(raw.decode("utf-8"))
+                except Exception:
+                    pass
+    if not body:
+        body = dict(request.query_params)
 
-    order_id = body.get("order_id") or body.get("merchant_order_id")
-    raw_status = body.get("status") or body.get("payment_status") or ""
+    logger.info("KlikQRIS webhook received: %s", json.dumps(body) if body else "(empty)")
+
+    order_id = (
+        body.get("order_id")
+        or body.get("merchant_order_id")
+        or body.get("id_order")
+        or body.get("id")
+    )
+    raw_status = (
+        body.get("status")
+        or body.get("payment_status")
+        or body.get("payment_status_raw")
+        or ""
+    )
     status = str(raw_status).strip().upper()
+
+    if raw_status is True or status in ("TRUE", "PAID", "SUCCESS", "COMPLETED", "SETTLED"):
+        status = "SUCCESS"
 
     if order_id and status:
         existing = db.get_order(order_id)
         if existing and existing.get("status") == "paid":
             logger.info("Order %s already PAID, ignoring duplicate webhook", order_id)
-        elif status in ("PAID", "SUCCESS"):
-            db.update_order_status(order_id, "paid")
-            logger.info("Order %s marked PAID via webhook", order_id)
-
+        elif status == "SUCCESS":
             try:
+                from jobs.poller import process_paid_order
                 from telegram import Bot
-                order = db.get_order(order_id)
-                if order:
-                    quantity = order["quantity"]
-                    product_id = order.get("product_id", 1)
-                    user_id = order["user_id"]
-                    user_lang = db.get_user_lang(user_id)
-                    product = db.get_product(product_id)
-                    product_name = product["name"] if product else "N/A"
-
-                    stock_items = db.take_stock(order_id, quantity, product_id=product_id)
-                    if stock_items:
-                        txt_content = ""
-                        for item in stock_items:
-                            em = item.get("email", "")
-                            pw = item.get("password", "")
-                            bal = item.get("balance", "")
-                            if pw and bal:
-                                txt_content += f"{em}:{pw}:{bal}\n"
-                            elif pw:
-                                txt_content += f"{em}:{pw}\n"
-                            else:
-                                txt_content += f"{em}\n"
-                        txt_bytes = txt_content.encode("utf-8")
-                        txt_file = io.BytesIO(txt_bytes)
-                        txt_file.name = f"accounts_{order_id}.txt"
-                        bot = Bot(token=config.BOT_TOKEN)
-
-                        caption = (
-                            f"{t('payment_success', user_lang)}\n"
-                            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"{t('order_label', user_lang)}: #{order_id}\n"
-                            f"{t('product_label', user_lang)}: {escape_md(product_name)}\n"
-                            f"{t('quantity_label_short', user_lang)}: {quantity} {t('accounts', user_lang)}\n"
-                            f"{t('total_label', user_lang)}: Rp {format_rupiah(order.get('total', 0))}\n"
-                            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                            f"{t('file_attached', user_lang)}"
-                        )
-
-                        await bot.send_document(
-                            chat_id=user_id,
-                            document=txt_file,
-                            caption=caption,
-                            reply_markup=get_main_menu_keyboard(user_id, user_lang),
-                        )
-                        logger.info("Webhook delivered %d accounts for %s", len(stock_items), order_id)
-
-                        qris_msg_id = order.get("qris_message_id")
-                        if qris_msg_id:
-                            try:
-                                await bot.delete_message(chat_id=user_id, message_id=qris_msg_id)
-                            except Exception:
-                                pass
-
-                        try:
-                            from notifier import send_channel_purchase_notif
-                            await send_channel_purchase_notif(bot, order, product_name)
-                        except Exception as e:
-                            logger.warning("Webhook channel purchase notif failed: %s", e)
-
-                    # --- Apply referral commission ---
-                    try:
-                        buyer_user = db._conn.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,)).fetchone()
-                        if buyer_user and buyer_user["referred_by"]:
-                            referrer_id = buyer_user["referred_by"]
-                            if not db.has_commission_for_order(order_id):
-                                commission_pct = db.get_commission_percent()
-                                order_amount = order.get("total", 0)
-                                commission_amount = int(order_amount * commission_pct / 100)
-                                if commission_amount > 0:
-                                    db.add_commission(referrer_id, user_id, order_id, order_amount, commission_pct, commission_amount)
-                                    try:
-                                        referrer_lang = db.get_user_lang(referrer_id)
-                                        await bot.send_message(
-                                            chat_id=referrer_id,
-                                            text=t("commission_notif", referrer_lang,
-                                                amount=format_rupiah(commission_amount),
-                                                name=order.get("first_name") or order.get("username") or str(user_id),
-                                                order_id=order_id),
-                                            parse_mode="Markdown",
-                                        )
-                                    except Exception:
-                                        pass
-                                    logger.info("Webhook commission Rp %d applied for referrer %s from order %s", commission_amount, referrer_id, order_id)
-                    except Exception as exc:
-                        logger.exception("Webhook commission failed for order %s: %s", order_id, exc)
+                bot = Bot(token=config.BOT_TOKEN)
+                await process_paid_order(bot, order_id)
+                logger.info("Order %s marked PAID via webhook", order_id)
             except Exception as e:
-                logger.exception("Webhook delivery failed for %s: %s", order_id, e)
+                logger.exception("Webhook process_paid_order error for %s: %s", order_id, e)
 
         elif status in ("EXPIRED", "FAILED", "CANCELLED"):
             db.update_order_status(order_id, "cancelled")
             released = db.release_stock(order_id)
             logger.info("Order %s cancelled via webhook (%s), released %d stock", order_id, status, released)
 
-    return {"status": "ok"}
+    return JSONResponse(content={"status": True, "message": "OK"}, status_code=200)
 
 
 @app.get("/api/health")
@@ -955,53 +932,6 @@ async def api_unban_user(user_id: int, request: Request):
     db.unban_user(user_id)
     return {"success": True}
 
-
-# ---------------------------------------------------------------------------
-# Voucher Management APIs
-# ---------------------------------------------------------------------------
-
-@app.get("/api/vouchers")
-async def api_get_vouchers(request: Request):
-    await _verify_admin(request)
-    vouchers = db.get_all_vouchers()
-    return {"vouchers": vouchers}
-
-
-@app.post("/api/vouchers/add")
-async def api_add_voucher(request: Request):
-    await _verify_admin(request)
-    body = await request.json()
-    code = str(body.get("code", "")).strip().upper()
-    discount_type = str(body.get("discount_type", "fixed")).strip()
-    discount_value = int(body.get("discount_value", 0))
-    min_purchase = int(body.get("min_purchase", 0))
-    max_uses = int(body.get("max_uses", 0))
-
-    if not code or discount_value <= 0:
-        return JSONResponse(status_code=400, content={"error": "Data voucher tidak valid"})
-
-    existing = db.get_voucher(code)
-    if existing:
-        return JSONResponse(status_code=400, content={"error": "Kode voucher sudah ada"})
-
-    vid = db.create_voucher(code, discount_type, discount_value, min_purchase, max_uses)
-    return {"success": True, "voucher_id": vid}
-
-
-@app.post("/api/vouchers/{vid}/toggle")
-async def api_toggle_voucher(vid: int, request: Request):
-    await _verify_admin(request)
-    db.toggle_voucher(vid)
-    return {"success": True}
-
-
-@app.delete("/api/vouchers/{vid}")
-async def api_delete_voucher(vid: int, request: Request):
-    await _verify_admin(request)
-    db.delete_voucher(vid)
-    return {"success": True}
-
-
 # ---------------------------------------------------------------------------
 # Feedback APIs
 # ---------------------------------------------------------------------------
@@ -1013,27 +943,36 @@ async def api_get_feedback(request: Request, status: Optional[str] = None):
     return {"feedback": feedbacks}
 
 
+@app.get("/api/feedback/{fid}/messages")
+async def api_get_feedback_messages(fid: int, request: Request):
+    await _verify_admin(request)
+    fb = db.get_feedback(fid)
+    if not fb:
+        return JSONResponse(status_code=404, content={"error": "Feedback tidak ditemukan"})
+    messages = db.get_feedback_messages(fid)
+    return {"feedback": fb, "messages": messages}
+
+
 @app.post("/api/feedback/{fid}/reply")
 async def api_reply_feedback(fid: int, request: Request):
-    await _verify_admin(request)
+    admin_id = await _verify_admin(request)
     body = await request.json()
     reply_text = str(body.get("reply", "")).strip()
     if not reply_text:
         return JSONResponse(status_code=400, content={"error": "Balasan kosong"})
 
-    fb = db.get_all_feedback()
-    fb_item = next((f for f in fb if f["id"] == fid), None)
+    fb_item = db.get_feedback(fid)
     if not fb_item:
         return JSONResponse(status_code=404, content={"error": "Feedback tidak ditemukan"})
 
-    db.reply_feedback(fid, reply_text)
+    db.reply_feedback(fid, reply_text, admin_id=admin_id)
 
     try:
         from telegram import Bot
         bot = Bot(token=config.BOT_TOKEN)
         await bot.send_message(
             chat_id=fb_item["user_id"],
-            text=f"💬 *Balasan Admin*\n\nFeedback Anda telah ditinjau:\n\n{reply_text}",
+            text=f"💬 *BALASAN ADMIN (Feedback #{fid})*\n━━━━━━━━━━━━━━━━━━━━━━━━\n{reply_text}\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 *Balas pesan ini untuk membalas ke Admin.*",
             parse_mode="Markdown",
         )
     except Exception as e:
