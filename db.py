@@ -394,17 +394,22 @@ def add_stock_batch(lines: list[str], product_id: int = 1) -> int:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        if "|" in line and ":" not in line:
-            line = line.replace("|", ":")
-        parts = line.split(":", 2)
-        if len(parts) >= 2:
-            email = parts[0].strip()
-            password = parts[1].strip()
-            balance = parts[2].strip() if len(parts) > 2 else ""
-        else:
+        if line.lower().startswith(("http://", "https://")):
             email = line
             password = ""
             balance = ""
+        else:
+            if "|" in line and ":" not in line:
+                line = line.replace("|", ":")
+            parts = line.split(":", 2)
+            if len(parts) >= 2:
+                email = parts[0].strip()
+                password = parts[1].strip()
+                balance = parts[2].strip() if len(parts) > 2 else ""
+            else:
+                email = line
+                password = ""
+                balance = ""
         if not email:
             continue
         try:
