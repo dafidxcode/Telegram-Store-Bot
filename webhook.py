@@ -233,6 +233,15 @@ async def api_add_product(request: Request):
         return JSONResponse(status_code=400, content={"error": "Nama dan harga produk tidak valid!"})
 
     pid = db.add_product(name=name, description=desc, price=price, stock_type=stock_type, instruction=instruction)
+    try:
+        from notifier import send_channel_new_product_notif
+        from telegram import Bot
+        bot = Bot(token=config.BOT_TOKEN)
+        product = db.get_product(pid)
+        if product:
+            await send_channel_new_product_notif(bot, product)
+    except Exception as e:
+        logger.warning("Failed to send channel new product notification: %s", e)
     return {"success": True, "product_id": pid}
 
 
@@ -345,6 +354,17 @@ async def api_add_stock(request: Request):
     lines = text.splitlines()
     count = db.add_stock_batch(lines, product_id=pid)
     stock = db.get_stock_count(pid)
+    if count > 0:
+        try:
+            from notifier import send_channel_add_stock_notif
+            from telegram import Bot
+            bot = Bot(token=config.BOT_TOKEN)
+            product = db.get_product(pid)
+            pname = product["name"] if product else "Produk"
+            price = product.get("price", 0) if product else 0
+            await send_channel_add_stock_notif(bot, pname, count, stock, price)
+        except Exception as e:
+            logger.warning("Failed to send channel add stock notification: %s", e)
     return {"success": True, "added": count, "total_product_stock": stock}
 
 

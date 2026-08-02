@@ -2592,35 +2592,55 @@
         // =========================================================================
 
         async function loadFeedback() {
-            const filter = document.getElementById('fb-filter').value;
-            const url = filter ? `/api/feedback?status=${filter}` : '/api/feedback';
-            const res = await fetch(url);
-            const data = await res.json();
-            const tbody = document.getElementById('feedback-table-body');
-            tbody.innerHTML = '';
+            try {
+                const filterEl = document.getElementById('fb-filter');
+                const filter = filterEl ? filterEl.value : '';
+                const url = filter ? `/api/feedback?status=${encodeURIComponent(filter)}` : '/api/feedback';
+                const res = await fetch(url);
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                const tbody = document.getElementById('feedback-table-body');
+                if (!tbody) return;
+                tbody.innerHTML = '';
 
-            (data.feedback || []).forEach(fb => {
-                const tr = document.createElement('tr');
-                const statusBadge = fb.status === 'replied' ? '<span class="badge badge-success">Replied</span>'
-                    : fb.status === 'closed' ? '<span class="badge badge-info">Closed</span>'
-                        : '<span class="badge badge-warning">Open</span>';
-                const msg = fb.message.length > 50 ? fb.message.substring(0, 50) + '...' : fb.message;
-                tr.innerHTML = `
-                    <td>#${fb.id}</td>
-                    <td>@${fb.username || '?'}<br><small style="color:var(--text-muted);">${fb.user_id}</small></td>
-                    <td><span class="badge badge-info">${fb.category}</span></td>
-                    <td style="max-width:250px; font-size:13px;">${msg}</td>
-                    <td>${statusBadge}</td>
-                    <td><span style="font-size:12px;">${fb.created_at || '-'}</span></td>
-                    <td>
-                        <div style="display:flex; gap:6px;">
-                            <button class="btn btn-sm btn-primary" onclick="openFeedbackChat(${fb.id})"><i class="fa-solid fa-comments"></i> Chat Inbox</button>
-                            ${fb.status !== 'closed' ? `<button class="btn btn-sm btn-danger" onclick="closeFeedback(${fb.id})"><i class="fa-solid fa-xmark"></i> Close</button>` : ''}
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+                const list = data.feedback || [];
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:20px;">Belum ada feedback / kritik saran.</td></tr>';
+                    return;
+                }
+
+                list.forEach(fb => {
+                    const tr = document.createElement('tr');
+                    const statusBadge = fb.status === 'replied' ? '<span class="badge badge-success">Replied</span>'
+                        : fb.status === 'closed' ? '<span class="badge badge-info">Closed</span>'
+                            : '<span class="badge badge-warning">Open</span>';
+                    const rawMsg = fb.message || '';
+                    const msg = rawMsg.length > 50 ? rawMsg.substring(0, 50) + '...' : rawMsg;
+                    tr.innerHTML = `
+                        <td>#${fb.id}</td>
+                        <td>@${escapeHtml(fb.username || '?')}<br><small style="color:var(--text-muted);">${fb.user_id}</small></td>
+                        <td><span class="badge badge-info">${escapeHtml(fb.category || 'saran')}</span></td>
+                        <td style="max-width:250px; font-size:13px; white-space:pre-wrap;">${escapeHtml(msg)}</td>
+                        <td>${statusBadge}</td>
+                        <td><span style="font-size:12px;">${fb.created_at || '-'}</span></td>
+                        <td>
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-primary" onclick="openFeedbackChat(${fb.id})"><i class="fa-solid fa-comments"></i> Chat Inbox</button>
+                                ${fb.status !== 'closed' ? `<button class="btn btn-sm btn-danger" onclick="closeFeedback(${fb.id})"><i class="fa-solid fa-xmark"></i> Close</button>` : ''}
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error('Error loading feedback:', err);
+                const tbody = document.getElementById('feedback-table-body');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--danger); padding:20px;">Gagal memuat feedback.</td></tr>';
+                }
+            }
         }
 
         async function openFeedbackChat(fid) {

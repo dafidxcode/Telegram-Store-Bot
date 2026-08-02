@@ -244,6 +244,13 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
             return
 
         product_id = db.add_product(name=name, description=desc, price=price)
+        try:
+            from notifier import send_channel_new_product_notif
+            prod = db.get_product(product_id)
+            if prod:
+                await send_channel_new_product_notif(context.bot, prod)
+        except Exception as e:
+            logger.warning("Failed to send channel new product notif: %s", e)
         await message.reply_text(
             f"{t('admin_product_added', lang)}\n\n"
             f"{t('admin_id', lang)}: `{product_id}`\n"
@@ -615,6 +622,13 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         context.user_data.pop("state", None)
 
         if count > 0:
+            try:
+                from notifier import send_channel_add_stock_notif
+                price = product.get("price", 0) if product else 0
+                await send_channel_add_stock_notif(context.bot, product_name, count, stock, price)
+            except Exception as e:
+                logger.warning("Failed to send channel add stock notif: %s", e)
+
             await message.reply_text(
                 f"{t('admin_stock_added', lang, name=product_name)}\n\n"
                 f"{t('admin_added_count', lang)}: *{count}* {t('accounts', lang)}\n"
@@ -686,6 +700,13 @@ async def cmd_addproduct(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     description = parts[2] if len(parts) > 2 else ""
 
     product_id = db.add_product(name=name, description=description, price=price)
+    try:
+        from notifier import send_channel_new_product_notif
+        prod = db.get_product(product_id)
+        if prod:
+            await send_channel_new_product_notif(context.bot, prod)
+    except Exception as e:
+        logger.warning("Failed to send channel new product notif: %s", e)
     await update.message.reply_text(
         f"{t('admin_product_added', lang)}\n\n"
         f"{t('admin_id', lang)}: `{product_id}`\n"
@@ -1002,6 +1023,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     product_label = product["name"] if product else "default product"
 
     if count > 0:
+        try:
+            from notifier import send_channel_add_stock_notif
+            price = product.get("price", 0) if product else 0
+            await send_channel_add_stock_notif(context.bot, product_label, count, stock, price)
+        except Exception as e:
+            logger.warning("Failed to send channel add stock notif: %s", e)
+
         await message.reply_text(
             f"{t('admin_stock_file_added', lang)}\n\n"
             f"{t('admin_name', lang)}: *{product_label}*\n"

@@ -1053,10 +1053,10 @@ def get_feedback_messages(feedback_id: int) -> list[dict]:
 
 def get_all_feedback(status: str | None = None, limit: int = 50) -> list[dict]:
     assert _conn is not None
-    if status:
+    if status and status.strip():
         rows = _conn.execute(
             "SELECT * FROM feedback WHERE status = ? ORDER BY id DESC LIMIT ?",
-            (status, limit),
+            (status.strip(), limit),
         ).fetchall()
     else:
         rows = _conn.execute(
