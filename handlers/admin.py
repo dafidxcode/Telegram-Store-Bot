@@ -177,6 +177,12 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         except Exception as e:
             logger.warning("Failed to send delivered preorder to user %s: %s", u_id, e)
 
+        try:
+            from notifier import send_channel_purchase_notif
+            await send_channel_purchase_notif(context.bot, order, product_name)
+        except Exception as e:
+            logger.warning("Failed to send channel purchase notif for preorder %s: %s", order_id, e)
+
         await message.reply_text(
             f"✅ *Produk Pre-Order #{order_id} berhasil dikirimkan ke pengguna!*",
             parse_mode=ParseMode.MARKDOWN,
@@ -971,6 +977,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
         except Exception as e:
             logger.warning("Failed to send delivered preorder to user %s: %s", u_id, e)
+
+        try:
+            from notifier import send_channel_purchase_notif
+            await send_channel_purchase_notif(context.bot, order, product_name)
+        except Exception as e:
+            logger.warning("Failed to send channel purchase notif for preorder %s: %s", order_id, e)
 
         await message.reply_text(
             f"✅ *Produk Pre-Order #{order_id} berhasil dikirimkan ke pengguna!*",

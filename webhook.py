@@ -593,11 +593,12 @@ async def api_approve_order(order_id: str, request: Request):
             except Exception:
                 pass
 
-        try:
-            from notifier import send_channel_purchase_notif
-            await send_channel_purchase_notif(bot, order, product_name)
-        except Exception as e:
-            logger.warning("Failed to send channel purchase notif: %s", e)
+        if not is_preorder:
+            try:
+                from notifier import send_channel_purchase_notif
+                await send_channel_purchase_notif(bot, order, product_name)
+            except Exception as e:
+                logger.warning("Failed to send channel purchase notif: %s", e)
 
         # --- Apply referral commission ---
         try:
@@ -696,6 +697,14 @@ async def api_deliver_preorder(order_id: str, request: Request):
         )
     except Exception as e:
         logger.warning("Failed to send web delivered preorder to user %s: %s", user_id, e)
+
+    try:
+        from notifier import send_channel_purchase_notif
+        from telegram import Bot
+        bot = Bot(token=config.BOT_TOKEN)
+        await send_channel_purchase_notif(bot, order, product_name)
+    except Exception as e:
+        logger.warning("Failed to send channel purchase notif for preorder %s: %s", order_id, e)
 
     return {"success": True, "message": f"Pre-Order #{order_id} berhasil dikirimkan ke buyer"}
 
