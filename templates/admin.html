@@ -1126,7 +1126,7 @@
                             <label><i class="fa-solid fa-message"></i> Isi Pesan (Format Markdown, opsional jika ada gambar)</label>
                             <textarea id="broadcast-text" class="form-control"
                                 placeholder="PROMO SPESIAL HARI INI!&#10;&#10;Gunakan kode promo untuk potongan harga..."
-                                style="min-height: 120px;"></textarea>
+                                style="min-height: 120px; white-space: pre-wrap;"></textarea>
                         </div>
                         <div class="form-group">
                             <label><i class="fa-solid fa-image"></i> URL Gambar (opsional)</label>
@@ -1358,8 +1358,8 @@
                 </div>
                 <div class="form-group">
                     <label>Deskripsi Produk (Tampil di Bot)</label>
-                    <textarea id="add-p-desc" class="form-control"
-                        placeholder="Keterangan garansi, fitur, dll..."></textarea>
+                    <textarea id="add-p-desc" class="form-control" style="min-height: 80px; white-space: pre-wrap;"
+                        placeholder="Keterangan garansi, fitur, dll... (Mendukung Enter / Baris Baru)"></textarea>
                 </div>
                 <div class="form-group">
                     <label>📌 Instruksi Penggunaan / Info Pembelian (Dikirimkan ke Pembeli bersama Akun)</label>
@@ -1398,7 +1398,7 @@
                 </div>
                 <div class="form-group">
                     <label>Deskripsi Produk (Tampil di Bot)</label>
-                    <textarea id="edit-p-desc" class="form-control"></textarea>
+                    <textarea id="edit-p-desc" class="form-control" style="min-height: 80px; white-space: pre-wrap;"></textarea>
                 </div>
                 <div class="form-group">
                     <label>📌 Instruksi Penggunaan / Info Pembelian (Dikirimkan ke Pembeli bersama Akun)</label>
@@ -1435,7 +1435,7 @@
                         Buyer)</label>
                     <textarea id="preorder-content-input" class="form-control"
                         placeholder="user@gmail.com:pass123:balance&#10;Catatan garansi..." required
-                        style="min-height: 140px; font-family: monospace;"></textarea>
+                        style="min-height: 140px; font-family: monospace; white-space: pre-wrap;"></textarea>
                 </div>
                 <button type="submit" class="btn btn-success"><i class="fa-solid fa-paper-plane"></i> Kirimkan ke Buyer
                     via Bot</button>
@@ -1456,7 +1456,7 @@
                     <label><i class="fa-solid fa-message"></i> Isi Pesan (Markdown, opsional jika ada gambar)</label>
                     <textarea id="broadcast-text-modal" class="form-control"
                         placeholder="📢 PROMO SPESIAL HARI INI!&#10;&#10;Dapatkan diskon 20% untuk pembelian Canva & Netflix..."
-                        style="min-height: 120px;"></textarea>
+                        style="min-height: 120px; white-space: pre-wrap;"></textarea>
                 </div>
                 <div class="form-group">
                     <label><i class="fa-solid fa-image"></i> URL Gambar (opsional)</label>
@@ -1694,7 +1694,7 @@
                         <td><b>${p.name}</b></td>
                         <td>${formatRupiah(p.price)}</td>
                         <td>${stockBadge}</td>
-                        <td style="max-width:200px; font-size:12px; color:var(--text-muted);">${p.description || '-'}</td>
+                        <td style="max-width:200px; font-size:12px; color:var(--text-muted); white-space:pre-wrap; word-break:break-word;">${escapeHtml(p.description || '-')}</td>
                         <td><span class="badge ${badge}">${p.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
                         <td>
                             <div style="display:flex; gap:4px; align-items:center;">

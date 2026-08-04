@@ -123,7 +123,21 @@ class KlikQRIS:
         except httpx.RequestError as e:
             raise KlikQRISError(f"Network error: {e}") from e
 
-    def verify_webhook(self, payload: dict, signature: str) -> bool:
+    def verify_webhook(self, payload: dict, signature: str, raw_body: Optional[bytes] = None) -> bool:
+        """Verify HMAC-SHA256 signature of a webhook callback.
+
+        Supports the two common signing schemes used by QRIS gateways:
+          1. HMAC-SHA256 over the raw request body bytes.
+          2. HMAC-SHA256 over the canonical JSON (json.dumps(payload, sort_keys=True)).
+
+        Verification is constant-time (hmac.compare_digest).
+        """
+        if not signature:
+            return False
+        if raw_body is not None:
+            expected = hmac.new(self.api_key.encode(), raw_body, hashlib.sha256).hexdigest()
+            if hmac.compare_digest(expected, signature):
+                return True
         data = json.dumps(payload, sort_keys=True)
         expected = hmac.new(self.api_key.encode(), data.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)

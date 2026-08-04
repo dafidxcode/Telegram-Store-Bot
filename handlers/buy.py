@@ -52,8 +52,16 @@ async def _create_order_and_pay(context, user, product, quantity, query=None, me
     lang = get_lang(context, user.id)
     total = product["price"] * quantity
 
+    if config.is_maintenance():
+        text = t("maintenance_mode", lang)
+        if query:
+            await _safe_edit_or_send(query, text, reply_markup=get_main_menu_keyboard(user.id, lang))
+        elif message:
+            await message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu_keyboard(user.id, lang))
+        return None, None
+
     qris_nominal = total
-    expires_at = (datetime.now(tz=timezone(timedelta(hours=7))) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
     order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2).upper()}"
 
     try:
@@ -353,6 +361,14 @@ async def cmd_beli(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id if update.effective_user else 0
     lang = get_lang(context, user_id)
 
+    if config.is_maintenance():
+        await message.reply_text(
+            t("maintenance_mode", lang),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_main_menu_keyboard(user_id, lang),
+        )
+        return ConversationHandler.END
+
     products = db.get_active_products()
     if not products:
         await message.reply_text(t("no_products_available", lang))
@@ -388,6 +404,10 @@ async def handle_select_product(update: Update, context: ContextTypes.DEFAULT_TY
 
     user_id = update.effective_user.id if update.effective_user else 0
     lang = get_lang(context, user_id)
+
+    if config.is_maintenance():
+        await _safe_edit_or_send(query, t("maintenance_mode", lang), reply_markup=get_main_menu_keyboard(user_id, lang))
+        return ConversationHandler.END
 
     try:
         product_id = int(query.data.split(":")[1])

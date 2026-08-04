@@ -1,5 +1,6 @@
 """Admin command handlers — all text translated per user language."""
 
+import asyncio
 import logging
 import re
 
@@ -15,7 +16,7 @@ from telegram.ext import (
 
 import config
 import db
-from handlers.start import btn_home, escape_md, get_lang, t, format_rupiah, get_num_emoji
+from handlers.start import btn_home, escape_md, get_lang, t, format_rupiah, get_num_emoji, send_broadcast_message
 
 logger = logging.getLogger(__name__)
 
@@ -306,31 +307,29 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
         success = 0
         failed = 0
 
+        photo_file_id = None
+        broadcast_content = ""
         if message.photo:
-            photo = message.photo[-1]
-            broadcast_caption = (message.caption or "").strip()
-            for uid in user_ids:
-                try:
-                    await context.bot.send_photo(
-                        chat_id=uid,
-                        photo=photo.file_id,
-                        caption=broadcast_caption or None,
-                        parse_mode=ParseMode.MARKDOWN,
-                    )
-                    success += 1
-                except Exception:
-                    failed += 1
+            photo_file_id = message.photo[-1].file_id
+            broadcast_content = (message.caption or "").strip()
         elif message.text:
-            broadcast_text = message.text.strip()
-            for uid in user_ids:
-                try:
-                    await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
-                    success += 1
-                except Exception:
-                    failed += 1
-        else:
+            broadcast_content = message.text.strip()
+
+        if not photo_file_id and not broadcast_content:
             await message.reply_text(t("admin_try_again", lang), reply_markup=_admin_back_keyboard(lang))
             return
+
+        for uid in user_ids:
+            try:
+                await send_broadcast_message(
+                    context.bot, uid,
+                    image_url=photo_file_id or None,
+                    text=broadcast_content,
+                )
+                success += 1
+            except Exception:
+                failed += 1
+            await asyncio.sleep(0.05)
 
         await message.reply_text(
             f"{t('admin_broadcast_done', lang)}\n\n"
@@ -525,6 +524,27 @@ async def handle_quick_addproduct_text(update: Update, context: ContextTypes.DEF
             db.update_product(pid, description=new_desc)
             await message.reply_text(
                 f"✅ Deskripsi produk berhasil diubah!",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✏️ Kembali ke Edit Produk", callback_data=f"admin:edetail:{pid}")],
+                    [InlineKeyboardButton(t("btn_admin_home", lang), callback_data="menu:admin")],
+                ]),
+            )
+        return
+
+    if admin_state == "editproduct_instruction":
+        message = update.message
+        if message is None or not message.text:
+            return
+        new_instruction = message.text.strip()
+        if new_instruction == "-":
+            new_instruction = ""
+        pid = context.user_data.pop("editproduct_id", None)
+        context.user_data.pop("admin_state", None)
+        if pid is not None:
+            db.update_product(pid, instruction=new_instruction)
+            await message.reply_text(
+                f"✅ Instruksi penggunaan produk berhasil diubah!",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("✏️ Kembali ke Edit Produk", callback_data=f"admin:edetail:{pid}")],
@@ -1233,18 +1253,15 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     failed = 0
     for uid in user_ids:
         try:
-            if image_url:
-                await context.bot.send_photo(
-                    chat_id=uid,
-                    photo=image_url,
-                    caption=broadcast_text or None,
-                    parse_mode=ParseMode.MARKDOWN,
-                )
-            else:
-                await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode=ParseMode.MARKDOWN)
+            await send_broadcast_message(
+                context.bot, uid,
+                image_url=image_url or None,
+                text=broadcast_text,
+            )
             success += 1
         except Exception:
             failed += 1
+        await asyncio.sleep(0.05)
 
     await message.reply_text(
         f"{t('admin_broadcast_done', lang)}\n\n"

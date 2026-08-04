@@ -47,6 +47,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def main():
     db.init_db(config.DB_PATH)
+    config.load_maintenance_mode()
     logger.info("Database siap: %s", config.DB_PATH)
     logger.info("Bot: @%s | Admin: %s", config.SHOP_NAME, config.ADMIN_USER_ID)
     logger.info("Admin IDs: %s", config.ADMIN_IDS)

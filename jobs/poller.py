@@ -41,10 +41,16 @@ async def process_paid_order(bot, order_id: str) -> bool:
     order = db.get_order(order_id)
     if not order:
         return False
-    if order.get("status") == "paid":
+    if order.get("status") in ("paid", "delivered"):
         return True
 
-    db.update_order_status(order_id, "paid")
+    if not db.mark_order_paid_if_pending(order_id):
+        recheck = db.get_order(order_id)
+        if recheck and recheck.get("status") in ("paid", "delivered"):
+            return True
+        logger.info("Order %s already being processed elsewhere, skipping", order_id)
+        return False
+
     logger.info("Order %s marked PAID", order_id)
 
     order = db.get_order(order_id)
@@ -263,7 +269,8 @@ async def _cleanup_expired_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = order["user_id"]
         user_lang = db.get_user_lang(user_id)
 
-        db.update_order_status(order_id, "cancelled")
+        if not db.mark_order_cancelled_if_pending(order_id):
+            continue
         released = db.release_stock(order_id)
         logger.info("Order %s EXPIRED locally, cancelled & released %d stock", order_id, released)
 
@@ -330,7 +337,8 @@ async def check_payments(context: ContextTypes.DEFAULT_TYPE) -> None:
             await process_paid_order(bot, order_id)
 
         elif payment_status in ("EXPIRED", "FAILED", "CANCELLED"):
-            db.update_order_status(order_id, "cancelled")
+            if not db.mark_order_cancelled_if_pending(order_id):
+                continue
             released = db.release_stock(order_id)
             logger.info("Order %s CANCELLED via poller (%s), released %d stock", order_id, payment_status, released)
 

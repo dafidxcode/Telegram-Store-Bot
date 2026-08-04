@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import db
-from handlers.start import t, format_rupiah, escape_md, get_main_menu_keyboard
+from handlers.start import t, format_rupiah, escape_md, get_main_menu_keyboard, send_broadcast_message
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ def _get_admin_token(telegram_id: int) -> str:
 @app.on_event("startup")
 async def startup():
     db.init_db(config.DB_PATH)
+    config.load_maintenance_mode()
     logger.info("Dashboard DB initialized at %s", config.DB_PATH)
 
 
@@ -140,7 +141,7 @@ async def api_auth_me(request: Request):
         "user_id": user_id,
         "is_main_admin": user_id == config.ADMIN_USER_ID,
         "shop_name": config.SHOP_NAME,
-        "maintenance_mode": config.MAINTENANCE_MODE,
+        "maintenance_mode": config.is_maintenance(),
     }
 
 
@@ -153,30 +154,25 @@ async def api_dashboard_summary(request: Request):
     await _verify_admin(request)
 
     stock = db.get_stock_count()
-    users = db.get_all_user_ids()
-    orders = db.get_all_orders(limit=100)
+    total_users = db.get_total_users()
+    oc = db.get_order_status_counts()
     rep = db.get_financial_report()
-
-    pending = len([o for o in orders if o.get("status") == "pending"])
-    paid = len([o for o in orders if o.get("status") == "paid"])
-    delivered = len([o for o in orders if o.get("status") == "delivered"])
-    cancelled = len([o for o in orders if o.get("status") == "cancelled"])
 
     products = db.get_all_products()
 
     return {
         "stock": stock,
-        "total_users": len(users),
-        "total_orders": len(orders),
+        "total_users": total_users,
+        "total_orders": oc["total"],
         "total_sold": db.get_total_sold(),
-        "pending": pending,
-        "paid": paid,
-        "delivered": delivered,
-        "cancelled": cancelled,
+        "pending": oc["pending"],
+        "paid": oc["paid"],
+        "delivered": oc["delivered"],
+        "cancelled": oc["cancelled"],
         "revenue": rep,
         "product_count": len(products),
         "active_product_count": len([p for p in products if p.get("is_active")]),
-        "maintenance_mode": config.MAINTENANCE_MODE,
+        "maintenance_mode": config.is_maintenance(),
         "shop_name": config.SHOP_NAME,
     }
 
@@ -512,7 +508,10 @@ async def api_approve_order(order_id: str, request: Request):
     if order.get("status") in ("paid", "delivered"):
         return JSONResponse(content={"success": True, "message": "Order sudah berstatus PAID sebelumnya"})
 
-    db.update_order_status(order_id, "paid")
+    if not db.mark_order_paid_if_pending(order_id):
+        return JSONResponse(content={"success": True, "message": "Order sudah diproses oleh sistem lain"})
+
+    order = db.get_order(order_id)
 
     delivered_count = 0
     try:
@@ -565,12 +564,12 @@ async def api_approve_order(order_id: str, request: Request):
             stock_items = db.take_stock(order_id, quantity, product_id=product_id)
             delivered_count = len(stock_items)
             if stock_items:
-                product_desc = (product.get("description") or "").strip() if product else ""
+                instruction_text = (product.get("instruction") or "").strip() if product else ""
                 txt_content = ""
-                if product_desc:
+                if instruction_text:
                     txt_content += f"==================================================\n"
-                    txt_content += f"CATATAN / PANDUAN PENGGUNAAN ({product_name}):\n"
-                    txt_content += f"{product_desc}\n"
+                    txt_content += f"INSTRUKSI PENGGUNAAN ({product_name}):\n"
+                    txt_content += f"{instruction_text}\n"
                     txt_content += f"==================================================\n\n"
 
                 for item in stock_items:
@@ -658,7 +657,12 @@ async def api_cancel_order(order_id: str, request: Request):
     if not order:
         return JSONResponse(status_code=404, content={"error": "Order tidak ditemukan"})
 
-    db.update_order_status(order_id, "cancelled")
+    if order.get("status") != "pending":
+        return JSONResponse(status_code=400, content={"error": f"Order tidak dapat dibatalkan (status saat ini: {order.get('status', '')})"})
+
+    if not db.mark_order_cancelled_if_pending(order_id):
+        return JSONResponse(status_code=400, content={"error": "Order sudah diproses oleh sistem lain"})
+
     released = db.release_stock(order_id)
     return {"success": True, "released_stock": released}
 
@@ -675,6 +679,9 @@ async def api_deliver_preorder(order_id: str, request: Request):
     order = db.get_order(order_id)
     if not order:
         return JSONResponse(status_code=404, content={"error": "Order tidak ditemukan"})
+
+    if order.get("status") != "paid":
+        return JSONResponse(status_code=400, content={"error": "Pre-Order harus berstatus PAID sebelum dikirim ke buyer"})
 
     product = db.get_product(order.get("product_id", 1))
     product_name = product["name"] if product else "N/A"
@@ -758,8 +765,8 @@ async def api_toggle_maintenance(request: Request):
     await _verify_admin(request)
     body = await request.json()
     enabled = bool(body.get("enabled", False))
-    config.MAINTENANCE_MODE = enabled
-    return {"success": True, "maintenance_mode": config.MAINTENANCE_MODE}
+    config.set_maintenance(enabled)
+    return {"success": True, "maintenance_mode": config.is_maintenance()}
 
 
 @app.post("/api/broadcast")
@@ -791,22 +798,21 @@ async def api_send_broadcast(request: Request):
     failed_cnt = 0
 
     try:
+        import asyncio
         from telegram import Bot
         bot = Bot(token=config.BOT_TOKEN)
         for uid in user_ids:
             try:
-                if image_bytes:
-                    photo_file = io.BytesIO(image_bytes)
-                    photo_file.seek(0)
-                    photo_file.name = "broadcast.jpg"
-                    await bot.send_photo(chat_id=uid, photo=photo_file, caption=message_text or None, parse_mode="Markdown")
-                elif image_url:
-                    await bot.send_photo(chat_id=uid, photo=image_url, caption=message_text or None, parse_mode="Markdown")
-                elif message_text:
-                    await bot.send_message(chat_id=uid, text=message_text, parse_mode="Markdown")
+                await send_broadcast_message(
+                    bot, uid,
+                    image_bytes=image_bytes,
+                    image_url=image_url or None,
+                    text=message_text,
+                )
                 sent_cnt += 1
             except Exception:
                 failed_cnt += 1
+            await asyncio.sleep(0.05)
     except Exception as e:
         logger.exception("Broadcast failed: %s", e)
 
@@ -859,24 +865,45 @@ async def api_remove_admin(request: Request):
 @app.api_route("/api/webhook/klikqris", methods=["GET", "POST"])
 @app.api_route("/api/webhook/klikqris/", methods=["GET", "POST"])
 async def klikqris_webhook(request: Request):
+    raw_body = await request.body()
+
     body = {}
-    try:
-        body = await request.json()
-    except Exception:
+    if raw_body:
         try:
-            form_data = await request.form()
-            body = dict(form_data)
+            body = json.loads(raw_body.decode("utf-8"))
         except Exception:
-            raw = await request.body()
-            if raw:
-                try:
-                    body = json.loads(raw.decode("utf-8"))
-                except Exception:
-                    pass
+            try:
+                form_data = await request.form()
+                body = dict(form_data)
+            except Exception:
+                pass
     if not body:
         body = dict(request.query_params)
 
     logger.info("KlikQRIS webhook received: %s", json.dumps(body) if body else "(empty)")
+
+    # -- Mandatory signature verification -------------------------------
+    signature = (
+        request.headers.get("X-Signature")
+        or request.headers.get("x-signature")
+        or request.headers.get("X-Webhook-Signature")
+        or request.headers.get("Signature")
+        or (body.get("signature") if isinstance(body, dict) else "")
+        or ""
+    )
+    if isinstance(signature, (list, tuple)):
+        signature = signature[0] if signature else ""
+    signature = str(signature or "").strip()
+
+    from payments import klikqris as pg_klikqris
+
+    if not pg_klikqris.is_active():
+        logger.warning("KlikQRIS webhook rejected: payment gateway not active")
+        return JSONResponse(content={"status": False, "message": "Payment gateway not active"}, status_code=503)
+
+    if not signature or not pg_klikqris.get().verify_webhook(body, signature, raw_body=raw_body):
+        logger.warning("KlikQRIS webhook rejected: invalid/missing signature")
+        return JSONResponse(content={"status": False, "message": "Invalid signature"}, status_code=403)
 
     order_id = (
         body.get("order_id")
@@ -910,9 +937,9 @@ async def klikqris_webhook(request: Request):
                 logger.exception("Webhook process_paid_order error for %s: %s", order_id, e)
 
         elif status in ("EXPIRED", "FAILED", "CANCELLED"):
-            db.update_order_status(order_id, "cancelled")
-            released = db.release_stock(order_id)
-            logger.info("Order %s cancelled via webhook (%s), released %d stock", order_id, status, released)
+            if db.mark_order_cancelled_if_pending(order_id):
+                released = db.release_stock(order_id)
+                logger.info("Order %s cancelled via webhook (%s), released %d stock", order_id, status, released)
 
     return JSONResponse(content={"status": True, "message": "OK"}, status_code=200)
 
@@ -925,16 +952,6 @@ async def health():
 # ---------------------------------------------------------------------------
 # User Management APIs
 # ---------------------------------------------------------------------------
-
-@app.get("/api/users")
-async def api_get_users(request: Request, query: Optional[str] = None, limit: int = 100):
-    await _verify_admin(request)
-    if query:
-        users = db.search_users(query)
-    else:
-        users = db.get_all_users_detail(limit=limit)
-    return {"users": users}
-
 
 @app.get("/api/users/{user_id}")
 async def api_get_user_detail(user_id: int, request: Request):

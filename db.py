@@ -101,7 +101,8 @@ CREATE TABLE IF NOT EXISTS feedback (
   admin_reply TEXT DEFAULT '',
   status TEXT DEFAULT 'open',
   created_at TEXT DEFAULT (datetime('now')),
-  replied_at TEXT DEFAULT ''
+  replied_at TEXT DEFAULT '',
+  last_activity_at TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS purchase_details (
@@ -222,6 +223,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {row["name"] for row in cursor.fetchall()}
     if "instruction" not in cols:
         conn.execute("ALTER TABLE products ADD COLUMN instruction TEXT DEFAULT ''")
+
+    cursor = conn.execute("PRAGMA table_info(feedback)")
+    cols = {row["name"] for row in cursor.fetchall()}
+    if "last_activity_at" not in cols:
+        conn.execute("ALTER TABLE feedback ADD COLUMN last_activity_at TEXT DEFAULT ''")
 
     for tbl in ("referrals", "feedback", "purchase_details", "referral_commissions", "withdrawal_requests", "bot_settings", "admin_sessions", "feedback_messages"):
         conn.execute(f"""
@@ -444,6 +450,21 @@ def get_total_sold() -> int:
     assert _conn is not None
     row = _conn.execute("SELECT COUNT(*) as cnt FROM stock WHERE status = 'sold'").fetchone()
     return row["cnt"] if row else 0
+
+
+def get_order_status_counts() -> dict:
+    """Accurate order counts by status (no LIMIT cap)."""
+    assert _conn is not None
+    total = _conn.execute("SELECT COUNT(*) as cnt FROM orders").fetchone()["cnt"]
+    rows = _conn.execute("SELECT status, COUNT(*) as cnt FROM orders GROUP BY status").fetchall()
+    counts = {str(r["status"]): int(r["cnt"]) for r in rows}
+    return {
+        "total": int(total),
+        "pending": counts.get("pending", 0),
+        "paid": counts.get("paid", 0),
+        "delivered": counts.get("delivered", 0),
+        "cancelled": counts.get("cancelled", 0),
+    }
 
 
 def get_user_order_count(user_id: int) -> int:
@@ -733,6 +754,31 @@ def get_expired_pending_orders() -> list[dict]:
     return [_row_to_dict(r) for r in rows]
 
 
+def mark_order_paid_if_pending(order_id: str) -> bool:
+    """Atomically transition an order to PAID. Returns True only for the caller
+    that wins the race (previous status must be pending/waiting_payment)."""
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE orders SET status = 'paid', paid_at = datetime('now') "
+        "WHERE id = ? AND status IN ('pending', 'waiting_payment')",
+        (order_id,),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def mark_order_cancelled_if_pending(order_id: str) -> bool:
+    """Atomically transition a pending order to CANCELLED. Returns True only
+    for the caller that wins the race."""
+    assert _conn is not None
+    cur = _conn.execute(
+        "UPDATE orders SET status = 'cancelled' WHERE id = ? AND status = 'pending'",
+        (order_id,),
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
@@ -742,8 +788,12 @@ def upsert_user(user_id: int, username: str | None, first_name: str | None) -> N
     existing = _conn.execute("SELECT lang FROM users WHERE user_id = ?", (user_id,)).fetchone()
     lang = existing["lang"] if existing and existing["lang"] else "en"
     _conn.execute(
-        """INSERT OR REPLACE INTO users (user_id, username, first_name, lang, last_seen)
-        VALUES (?, ?, ?, ?, datetime('now'))""",
+        """INSERT INTO users (user_id, username, first_name, lang, last_seen)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET
+            username = excluded.username,
+            first_name = excluded.first_name,
+            last_seen = excluded.last_seen""",
         (user_id, username, first_name, lang),
     )
     _conn.commit()
@@ -1003,7 +1053,7 @@ def add_feedback(user_id: int, username: str, category: str, message: str) -> in
         return fb_id
 
     cur = _conn.execute(
-        "INSERT INTO feedback (user_id, username, category, message, status) VALUES (?, ?, ?, ?, 'open')",
+        "INSERT INTO feedback (user_id, username, category, message, status, last_activity_at) VALUES (?, ?, ?, ?, 'open', strftime('%Y-%m-%d %H:%M:%f','now'))",
         (user_id, username, category, message),
     )
     fb_id = cur.lastrowid
@@ -1035,12 +1085,12 @@ def add_feedback_message(feedback_id: int, sender: str, sender_id: int, message:
     )
     if sender == "admin":
         _conn.execute(
-            "UPDATE feedback SET admin_reply = ?, status = 'replied', replied_at = datetime('now') WHERE id = ?",
+            "UPDATE feedback SET admin_reply = ?, status = 'replied', replied_at = datetime('now'), last_activity_at = strftime('%Y-%m-%d %H:%M:%f','now') WHERE id = ?",
             (message, feedback_id),
         )
     else:
         _conn.execute(
-            "UPDATE feedback SET message = ?, status = 'open' WHERE id = ?",
+            "UPDATE feedback SET message = ?, status = 'open', last_activity_at = strftime('%Y-%m-%d %H:%M:%f','now') WHERE id = ?",
             (message, feedback_id),
         )
     _conn.commit()
@@ -1058,14 +1108,15 @@ def get_feedback_messages(feedback_id: int) -> list[dict]:
 
 def get_all_feedback(status: str | None = None, limit: int = 50) -> list[dict]:
     assert _conn is not None
+    order = "ORDER BY COALESCE(NULLIF(last_activity_at, ''), created_at) DESC, id DESC LIMIT ?"
     if status and status.strip():
         rows = _conn.execute(
-            "SELECT * FROM feedback WHERE status = ? ORDER BY id DESC LIMIT ?",
+            "SELECT * FROM feedback WHERE status = ? " + order,
             (status.strip(), limit),
         ).fetchall()
     else:
         rows = _conn.execute(
-            "SELECT * FROM feedback ORDER BY id DESC LIMIT ?",
+            "SELECT * FROM feedback " + order,
             (limit,),
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
@@ -1080,7 +1131,7 @@ def reply_feedback(feedback_id: int, admin_reply: str, admin_id: int = 0) -> boo
 def close_feedback(feedback_id: int) -> bool:
     assert _conn is not None
     cur = _conn.execute(
-        "UPDATE feedback SET status = 'closed' WHERE id = ?",
+        "UPDATE feedback SET status = 'closed', last_activity_at = strftime('%Y-%m-%d %H:%M:%f','now') WHERE id = ?",
         (feedback_id,),
     )
     _conn.commit()

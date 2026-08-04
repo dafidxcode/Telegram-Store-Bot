@@ -96,6 +96,7 @@ T = {
     # Product not available
     "product_not_available": {"en": "❌ Product is not available.", "id": "❌ Produk tidak tersedia."},
     "no_products_available": {"en": "❌ No products available yet. Please wait for admin to add products.", "id": "❌ Belum ada produk yang tersedia. Silakan tunggu admin menambahkan produk."},
+    "maintenance_mode":     {"en": "🚧 *Maintenance Mode*\n\nThe store is currently under maintenance. Please try again later. 🙏", "id": "🚧 *Mode Pemeliharaan*\n\nToko sedang dalam perawatan. Silakan coba lagi nanti. 🙏"},
 
     # Product detail
     "product_details":      {"en": "*📋 Product Details*", "id": "*📋 Detail Produk*"},
@@ -201,6 +202,7 @@ T = {
     "admin_edit_select_prompt":     {"en": "👇 Select a product to edit:", "id": "👇 Pilih produk yang ingin diubah:"},
     "admin_send_new_name":          {"en": "📝 Please send new name for product *{name}*:", "id": "📝 Kirimkan nama baru untuk produk *{name}*:"},
     "admin_send_new_desc":          {"en": "📝 Please send new description for product *{name}* (send `-` for empty):", "id": "📝 Kirimkan deskripsi baru untuk produk *{name}* (kirim `-` jika tanpa deskripsi):"},
+    "admin_send_new_instruction":   {"en": "📌 Please send new usage instruction / purchase info for product *{name}* (send `-` for empty):", "id": "📌 Kirimkan instruksi penggunaan / info pembelian baru untuk produk *{name}* (kirim `-` jika kosong):"},
     "admin_send_new_price":         {"en": "💰 Please send new price (in IDR) for product *{name}*:", "id": "💰 Kirimkan harga baru (dalam Rupiah) untuk produk *{name}*:"},
 
     # Admin — product list

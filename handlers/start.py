@@ -1,5 +1,6 @@
 """Start, help, and menu command handlers with inline keyboard buttons."""
 
+import io
 import logging
 import os
 from datetime import datetime, timezone, timedelta
@@ -28,6 +29,34 @@ def escape_md(text: str) -> str:
 
 def format_rupiah(n: int) -> str:
     return f"{n:,}".replace(",", ".")
+
+
+async def send_broadcast_message(bot, user_id, *, image_bytes=None, image_url=None, text=""):
+    """Send a broadcast (text and/or image) to a single user.
+
+    Tries Markdown formatting first; if the message fails to parse
+    (e.g. unescaped markdown characters), retries without parse_mode so a
+    single bad character never blocks delivery to the user.
+    `image_bytes` is raw image data, `image_url` is a URL string or a
+    Telegram file_id, and `text` is the optional caption/message.
+    """
+    caption = text or None
+
+    async def _send(parse_mode):
+        if image_bytes is not None:
+            photo = io.BytesIO(image_bytes)
+            photo.seek(0)
+            photo.name = "broadcast.jpg"
+            return await bot.send_photo(chat_id=user_id, photo=photo, caption=caption, parse_mode=parse_mode)
+        if image_url:
+            return await bot.send_photo(chat_id=user_id, photo=image_url, caption=caption, parse_mode=parse_mode)
+        return await bot.send_message(chat_id=user_id, text=caption, parse_mode=parse_mode)
+
+    try:
+        return await _send(ParseMode.MARKDOWN)
+    except Exception as e:
+        logger.warning("Broadcast markdown parse failed for user %s, retrying plain: %s", user_id, e)
+        return await _send(None)
 
 
 def get_lang(context: ContextTypes.DEFAULT_TYPE, user_id: int = 0) -> str:
@@ -1619,6 +1648,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📦 *Nama*: {escape_md(product['name'])}\n"
             f"💰 *Harga*: Rp {format_rupiah(product['price'])}\n"
             f"📝 *Deskripsi*: {escape_md(product['description']) if product['description'] else '-'}\n"
+            f"📌 *Instruksi*: {escape_md(product['instruction']) if product['instruction'] else '-'}\n"
             f"Status: *{status_label}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Pilih bagian yang ingin diubah:"
@@ -1630,7 +1660,10 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
                 InlineKeyboardButton("📝 Ubah Deskripsi", callback_data=f"admin:edesc:{pid}"),
             ],
             [
+                InlineKeyboardButton("📌 Ubah Instruksi", callback_data=f"admin:eins:{pid}"),
                 InlineKeyboardButton("💰 Ubah Harga", callback_data=f"admin:eprice:{pid}"),
+            ],
+            [
                 InlineKeyboardButton(toggle_btn_label, callback_data=f"admin:etog:{pid}"),
             ],
             [
@@ -1670,6 +1703,23 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             await _safe_edit_or_send(
                 query,
                 t("admin_send_new_desc", lang, name=escape_md(product["name"])),
+                reply_markup=get_admin_back_keyboard(lang, back_data=f"admin:edetail:{pid}"),
+            )
+
+    elif action == "eins":
+        if len(parts) < 3:
+            return
+        try:
+            pid = int(parts[2])
+        except ValueError:
+            return
+        product = db.get_product(pid)
+        if product:
+            context.user_data["admin_state"] = "editproduct_instruction"
+            context.user_data["editproduct_id"] = pid
+            await _safe_edit_or_send(
+                query,
+                t("admin_send_new_instruction", lang, name=escape_md(product["name"])),
                 reply_markup=get_admin_back_keyboard(lang, back_data=f"admin:edetail:{pid}"),
             )
 
@@ -1714,6 +1764,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"📦 *Nama*: {escape_md(product['name'])}\n"
                 f"💰 *Harga*: Rp {format_rupiah(product['price'])}\n"
                 f"📝 *Deskripsi*: {escape_md(product['description']) if product['description'] else '-'}\n"
+                f"📌 *Instruksi*: {escape_md(product['instruction']) if product['instruction'] else '-'}\n"
                 f"Status: *{status_label}*\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                 f"Pilih bagian yang ingin diubah:"
@@ -1725,7 +1776,10 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
                     InlineKeyboardButton("📝 Ubah Deskripsi", callback_data=f"admin:edesc:{pid}"),
                 ],
                 [
+                    InlineKeyboardButton("📌 Ubah Instruksi", callback_data=f"admin:eins:{pid}"),
                     InlineKeyboardButton("💰 Ubah Harga", callback_data=f"admin:eprice:{pid}"),
+                ],
+                [
                     InlineKeyboardButton(toggle_btn_label, callback_data=f"admin:etog:{pid}"),
                 ],
                 [
@@ -1787,8 +1841,9 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
     elif action == "settings":
-        status = "🟢 AKTIF (Normal)" if not config.MAINTENANCE_MODE else "🔴 NONAKTIF (Maintenance ON)"
-        btn_maint = "🔴 Aktifkan Maintenance" if not config.MAINTENANCE_MODE else "🟢 Matikan Maintenance Mode"
+        maint_on = config.is_maintenance()
+        status = "🔴 NONAKTIF (Maintenance ON)" if maint_on else "🟢 AKTIF (Normal)"
+        btn_maint = "🟢 Matikan Maintenance Mode" if maint_on else "🔴 Aktifkan Maintenance"
         text = (
             f"{t('admin_bot_settings_title', lang)}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -1802,11 +1857,12 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _safe_edit_or_send(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif action == "toggle_maint":
-        config.MAINTENANCE_MODE = not config.MAINTENANCE_MODE
-        status_txt = "Maintenance Mode ON" if config.MAINTENANCE_MODE else "Maintenance Mode OFF"
+        new_state = not config.is_maintenance()
+        config.set_maintenance(new_state)
+        status_txt = "Maintenance Mode ON" if new_state else "Maintenance Mode OFF"
         await query.answer(f"Status Bot: {status_txt}", show_alert=True)
-        status = "🟢 AKTIF (Normal)" if not config.MAINTENANCE_MODE else "🔴 NONAKTIF (Maintenance ON)"
-        btn_maint = "🔴 Aktifkan Maintenance" if not config.MAINTENANCE_MODE else "🟢 Matikan Maintenance Mode"
+        status = "🔴 NONAKTIF (Maintenance ON)" if new_state else "🟢 AKTIF (Normal)"
+        btn_maint = "🟢 Matikan Maintenance Mode" if new_state else "🔴 Aktifkan Maintenance"
         text = (
             f"{t('admin_bot_settings_title', lang)}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -1945,8 +2001,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             fid = int(parts[2])
         except ValueError:
             return
-        feedbacks = db.get_all_feedback()
-        fb = next((x for x in feedbacks if x["id"] == fid), None)
+        fb = db.get_feedback(fid)
         if not fb:
             await query.answer("Feedback tidak ditemukan!", show_alert=True)
             return
@@ -2139,8 +2194,12 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not order:
             await query.answer("Pesanan tidak ditemukan!", show_alert=True)
             return
-        if order["status"] == "paid":
+        if order["status"] in ("paid", "delivered"):
             await query.answer("Pesanan ini sudah dibayar!", show_alert=True)
+            return
+
+        if not db.mark_order_paid_if_pending(order_id):
+            await query.answer("Pesanan ini sudah diproses oleh sistem lain!", show_alert=True)
             return
 
         product_id = order.get("product_id", 1)
@@ -2154,12 +2213,12 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         product_name = product["name"] if product else "Produk"
         buyer_lang = db.get_user_lang(order["user_id"])
 
-        product_desc = (product.get("description") or "").strip() if product else ""
+        instruction_text = (product.get("instruction") or "").strip() if product else ""
         txt_lines = []
-        if product_desc:
+        if instruction_text:
             txt_lines.append("==================================================")
-            txt_lines.append(f"CATATAN / PANDUAN PENGGUNAAN ({product_name}):")
-            txt_lines.append(product_desc)
+            txt_lines.append(f"INSTRUKSI PENGGUNAAN ({product_name}):")
+            txt_lines.append(instruction_text)
             txt_lines.append("==================================================\n")
 
         for item in items:

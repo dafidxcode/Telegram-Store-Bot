@@ -76,3 +76,28 @@ def get_channel_link() -> str:
     from db import get_setting
     return get_setting("channel_link", CHANNEL_LINK)
 
+
+# ---------------------------------------------------------------------------
+# Maintenance mode (persistent in bot_settings, synced with in-memory flag)
+# ---------------------------------------------------------------------------
+
+def is_maintenance() -> bool:
+    from db import get_setting
+    value = get_setting("maintenance_mode", "true" if MAINTENANCE_MODE else "false")
+    return str(value).strip().lower() == "true"
+
+
+def set_maintenance(enabled: bool) -> None:
+    global MAINTENANCE_MODE
+    from db import set_setting
+    MAINTENANCE_MODE = bool(enabled)
+    set_setting("maintenance_mode", "true" if MAINTENANCE_MODE else "false")
+
+
+def load_maintenance_mode() -> None:
+    """Load persisted maintenance state from DB into the in-memory flag."""
+    global MAINTENANCE_MODE
+    from db import get_setting
+    value = get_setting("maintenance_mode", "false")
+    MAINTENANCE_MODE = str(value).strip().lower() == "true"
+
