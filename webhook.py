@@ -778,14 +778,19 @@ async def api_send_broadcast(request: Request):
     image_bytes = None
 
     content_type = request.headers.get("content-type", "").lower()
+    parsed = False
     if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
-        form = await request.form()
-        message_text = str(form.get("message", "")).strip()
-        image_url = str(form.get("image_url", "")).strip()
-        uploaded = form.get("image")
-        if uploaded and hasattr(uploaded, "read"):
-            image_bytes = await uploaded.read()
-    else:
+        try:
+            form = await request.form()
+            message_text = str(form.get("message", "")).strip()
+            image_url = str(form.get("image_url", "")).strip()
+            uploaded = form.get("image")
+            if uploaded and hasattr(uploaded, "read"):
+                image_bytes = await uploaded.read()
+            parsed = True
+        except Exception:
+            logger.exception("Multipart form parsing failed for broadcast, falling back to JSON")
+    if not parsed:
         body = await request.json()
         message_text = str(body.get("message", "")).strip()
         image_url = str(body.get("image_url", "")).strip()
